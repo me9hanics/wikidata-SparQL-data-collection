@@ -1,5 +1,5 @@
 # SparQL Wikidata data collection from Wikipedia profiles 
-A file with functions to help gather various data of personalities (and other entities) from Wikidata, and a notebook showing how to use it.
+A file with functions to help fetch various data of personalities (and other entities) from Wikidata, and a notebook showing how to use them.
 
 ## Usage
 
