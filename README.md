@@ -1,9 +1,7 @@
-# sparql-wikidata-person-info-gathering
-A notebook showing how one may use SparQL to gather various data of personalities (and other entities) from Wikidata.
+# SparQL Wikidata data collection from Wikipedia profiles 
+A file with functions to help gather various data of personalities (and other entities) from Wikidata, and a notebook showing how to use it.
 
-
-
-## How to use
+## Usage
 
 ### Get the information of someone, e.g. van Gogh from Wikidata
 
