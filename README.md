@@ -20,10 +20,6 @@ van_gogh_response
 The returned response:
 
 ```
-
-
-
-
     {'name': 'Van Gogh',
      'birth_place': 'Zundert',
      'birth_date': '1853-03-30T00:00:00Z',
@@ -47,7 +43,7 @@ The returned response:
        'start_time': '1879-08-01T00:00:00Z',
        'end_time': '1880-10-01T00:00:00Z',
        'point_in_time': None}]}
-
+```
 
 
 Print some information from the dictionary:
