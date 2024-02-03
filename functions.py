@@ -1,4 +1,4 @@
-def sparql_query(query, endpoint_url="https://query.wikidata.org/sparql", retries=3, delay=1):
+def sparql_query(query, endpoint_url="https://query.wikidata.org/sparql", retries=3, delay=10):
     import requests
     import time
 
@@ -7,7 +7,7 @@ def sparql_query(query, endpoint_url="https://query.wikidata.org/sparql", retrie
         
         if response.status_code == 200: #Successful
             return response.json()
-        else: #Some status codes are handled,it's fine now
+        else: #Some status codes could be handled handled, it's fine now to only handle time based status codes
             print(f"Error fetching data, status code: {response.status_code}. Attempt {attempt + 1} of {retries}.")
             if response.status_code in [429, 500, 502, 503, 504]:
                 time.sleep(delay)
