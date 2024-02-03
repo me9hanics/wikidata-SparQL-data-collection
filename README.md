@@ -71,7 +71,7 @@ For a nicer display, we can print each part manually, with residence period too:
 places_str = f.get_places_with_years_from_response(van_gogh_response)
 places_list = f.stringlist_to_list(places_str)
 for place in places_list:
-    name,period = place.replace(","," and ").split(":")
+    name,period = place.replace(",", " and ").split(":")
     print(f"{name}, between {period}")
 ```
 
