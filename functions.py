@@ -1,7 +1,8 @@
-def sparql_query(query, endpoint_url="https://query.wikidata.org/sparql", retries=3, delay=10):
+def sparql_query(query,  retries=3, delay=10):
     import requests
     import time
 
+    endpoint_url="https://query.wikidata.org/sparql"
     for attempt in range(retries):
         response = requests.get(endpoint_url, params={'query': query, 'format': 'json'})
         
@@ -18,8 +19,16 @@ def sparql_query(query, endpoint_url="https://query.wikidata.org/sparql", retrie
 
 
 #Example dict: {'painter': "wdt:P31 wd:Q5;", }
-def sparql_query_by_dict(select_labels, WHERE_dict, endpoint_url="https://query.wikidata.org/sparql", retries=3, delay=1):
-    return
+def sparql_query_by_dict(variable_names, WHERE_dict, endpoint_url="https://query.wikidata.org/sparql", retries=3, delay=1):
+    from functions import sparql_query
+    select = "SELECT " + " ".join([f"?{name}" for name in variable_names])
+    where = " WHERE {\n"
+    for variable, value in WHERE_dict.items():
+        where += f"?{variable} {value}\n"
+    service = '\nSERVICE wikibase:label { bd:serviceParam wikibase:language "[AUTO_LANGUAGE],en". }' #Need to watch out for quotation marks
+    
+    query = select + where + service
+    return sparql_query(query, retries, delay)
 
 
 def get_all_person_info(person_name, endpoint_url="https://query.wikidata.org/sparql", retries=3, delay=1):
