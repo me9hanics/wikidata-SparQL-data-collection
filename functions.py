@@ -1,3 +1,27 @@
+def sparql_query(query, endpoint_url="https://query.wikidata.org/sparql", retries=3, delay=1):
+    import requests
+    import time
+
+    for attempt in range(retries):
+        response = requests.get(endpoint_url, params={'query': query, 'format': 'json'})
+        
+        if response.status_code == 200: #Successful
+            return response.json()
+        else: #Some status codes are handled,it's fine now
+            print(f"Error fetching data, status code: {response.status_code}. Attempt {attempt + 1} of {retries}.")
+            if response.status_code in [429, 500, 502, 503, 504]:
+                time.sleep(delay)
+            else:
+                break
+
+    return None
+
+
+#Example dict: {'painter': "wdt:P31 wd:Q5;", }
+def sparql_query_by_dict(select_labels, WHERE_dict, endpoint_url="https://query.wikidata.org/sparql", retries=3, delay=1):
+    return
+
+
 def get_all_person_info(person_name, endpoint_url="https://query.wikidata.org/sparql", retries=3, delay=1):
     import requests
     import time
@@ -22,7 +46,7 @@ def get_all_person_info(person_name, endpoint_url="https://query.wikidata.org/sp
       }
       SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
     }
-    ''' % person_name.replace('"', '\"')
+    ''' % person_name.replace('"', '\"') #For the "%s"@en part, the person_name is put in there, but for quotation marks, they are escaped with a backslash (regex-like)
 
     for attempt in range(retries):
         response = requests.get(endpoint_url, params={'query': query, 'format': 'json'})
@@ -90,8 +114,7 @@ def get_person_info(person_name, endpoint_url="https://query.wikidata.org/sparql
       }
       SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
     }
-    ''' % person_name.replace('"', '\"')
-    #We already have birth data, so this function will not be used
+    ''' % person_name.replace('"', '\"') #For the "%s"@en part, the person_name is put in there, but for quotation marks, they are escaped with a backslash (regex-like)
 
     #Attempts till we get a response / 'retries' goes over the limit
     for attempt in range(retries):
@@ -151,7 +174,7 @@ def get_person_locations(person_name, endpoint_url="https://query.wikidata.org/s
       }
       SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
     }
-    ''' % person_name.replace('"', '\"')
+    ''' % person_name.replace('"', '\"') #For the "%s"@en part, the person_name is put in there, but for quotation marks, they are escaped with a backslash (regex-like)
     #We already have birth data, so this function will not be used
 
     #Attempts till we get a response / 'retries' goes over the limit
