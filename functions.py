@@ -9,17 +9,19 @@ def sparql_query(query,  retries=3, delay=10):
         if response.status_code == 200: #Successful
             return response.json()
         else: #Some status codes could be handled handled, it's fine now to only handle time based status codes
-            print(f"Error fetching data, status code: {response.status_code}. Attempt {attempt + 1} of {retries}.")
+            print(f"Error fetching data, status code: {response.status_code}.")
             if response.status_code in [429, 500, 502, 503, 504]:
+                print(f"Attempt {attempt + 1} of {retries}.")
                 time.sleep(delay)
             else:
+                print(f"Not retrying status code {response.status_code}.")
                 break
 
     return None
 
 
-#Example dict: {'painter': "wdt:P31 wd:Q5;", }
-def sparql_query_by_dict(variable_names, WHERE_dict, endpoint_url="https://query.wikidata.org/sparql", retries=3, delay=1):
+#Example dict: {'painter': "wdt:P31 wd:Q5;", ... }
+def sparql_query_by_dict(variable_names, WHERE_dict, endpoint_url="https://query.wikidata.org/sparql", retries=3, delay=10):
     from functions import sparql_query
     select = "SELECT " + " ".join([f"?{name}" for name in variable_names])
     where = " WHERE {\n"
