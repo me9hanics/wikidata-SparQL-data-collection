@@ -120,7 +120,8 @@ We could get all this information by using a SparQL query, simplifying the proce
     ''' % person_name.replace('"', '\"')
   ```
 
-What does each part do?<br>
+What does each part do?
+
 The ```SELECT``` row declaring the variables with names (with questionmarks in front) and only the ones that will be returned in the response (see how ?occupation is not included, but ?occupationLabel is). Some variables get a "Label" suffix, they represent the human-readable representative name of the person, whereas the "original" variable stores the identifier (like "Budapest" is the label and "Q1781" is its identifier). The ```SERVICE``` line helps to put these values in the Label variables, only having to include this line instead of a line for every label, this is a special feature by Wikidata. This is described [here](https://en.wikibooks.org/wiki/SPARQL/SERVICE_-_Label) well, at the "Automatic Label SERVICE": *If an unbound variable in SELECT is named ?NAMELabel, then WDQS produces the label (rdfs:label) for the entity in variable ?NAME.*<br>
 The ```WHERE``` describes what each non-label variable shall equal. Adding the ```OPTIONAL``` keyword makes the variable just supplementary, the query will still return a response if its not found.<br>
 The ```?person ?label "%s"@en.``` gives the ?personLabel variable the name of the person. "%s" (like in C and C++) is a placeholder for a string, the string being ```person_name.replace('"', '\"')```, which basically just puts the name of the painter defined before, which is "Vincent van Gogh", and with the ```replace('"', '\"')``` functionality we put a "\" character before the quotation marks, to [escape these characters](https://en.wikipedia.org/wiki/Escape_sequence).<br> 
