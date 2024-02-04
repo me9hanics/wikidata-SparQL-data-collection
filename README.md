@@ -3,6 +3,8 @@ A file with functions to help fetch various data of personalities (and other ent
 
 ## Usage
 
+The functions are in the ```functions.py``` file, which you can easily import after downloading 
+
 ### Get the information of someone, e.g. van Gogh from Wikidata
 
 Using the ```get_all_person_info``` function (other options are *get_person_info* and *get_person_locations* which include less information)
@@ -95,7 +97,51 @@ for place in places_list:
     Maison Van Gogh, between 1879-1880
     
 
-Now, on something bigger, using artists from the [PainterPalette](https://github.com/me9hanics/PainterPalette) dataset:
+We could get all this information by using a SparQL query, simplifying the process. Let's see how an example of a SparQL query:
+  
+  ```sparql
+    person_name = "Vincent van Gogh"
+    query = '''
+    SELECT ?person ?personLabel ?placeOfBirthLabel ?dateOfBirth ?workLocationLabel ?startTime ?endTime ?pointInTime ?citizenshipLabel ?occupationLabel WHERE {
+      ?person ?label "%s"@en.
+      ?person wdt:P19 ?placeOfBirth.
+      ?person wdt:P569 ?dateOfBirth.
+      OPTIONAL { ?person wdt:P27 ?citizenship. }
+      OPTIONAL { ?person wdt:P106 ?occupation. }
+      OPTIONAL {
+        ?person p:P937 ?workStmt.
+        ?workStmt ps:P937 ?workLocation.
+        OPTIONAL { ?workStmt pq:P580 ?startTime. }
+        OPTIONAL { ?workStmt pq:P582 ?endTime. }
+        OPTIONAL { ?workStmt pq:P585 ?pointInTime. }
+      }
+      SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+    }
+    ''' % person_name.replace('"', '\"')
+  ```
+
+What does each part do?<br>
+The ```SELECT``` row declaring the variables with names (with questionmarks in front) and only the ones that will be returned in the response (see how ?occupation is not included, but ?occupationLabel is). Some variables get a "Label" suffix, they represent the human-readable representative name of the person, whereas the "original" variable stores the identifier (like "Budapest" is the label and "Q1781" is its identifier). The ```SERVICE``` line helps to put these values in the Label variables, only having to include this line instead of a line for every label, this is a special feature by Wikidata. This is described [here](https://en.wikibooks.org/wiki/SPARQL/SERVICE_-_Label) well, at the "Automatic Label SERVICE": *If an unbound variable in SELECT is named ?NAMELabel, then WDQS produces the label (rdfs:label) for the entity in variable ?NAME.*<br>
+The ```WHERE``` describes what each non-label variable shall equal. Adding the ```OPTIONAL``` keyword makes the variable just supplementary, the query will still return a response if its not found.<br>
+The ```?person ?label "%s"@en.``` gives the ?personLabel variable the name of the person. "%s" (like in C and C++) is a placeholder for a string, the string being ```person_name.replace('"', '\"')```, which basically just puts the name of the painter defined before, which is "Vincent van Gogh", and with the ```replace('"', '\"')``` functionality we put a "\" character before the quotation marks, to [escape these characters](https://en.wikipedia.org/wiki/Escape_sequence).<br> 
+The ```?person wdt:P19 ?placeOfBirth.``` line and others tell which Wikidata item (entity) should the variable take as value. Here, it is a property, as represented by the "P", and P19 is the "place of birth" property of a profile. The "wdt" keyword stands for Wikidata "truthy", which basically points to a the properties-containing sub-URL. This substitutes the following SparQL code: ```PREFIX wdt: <http://www.wikidata.org/prop/direct/>```. For most common cases, this is used, or the general "wd" keyword for specific items. Here is an example for it:
+
+  ```sparql
+
+    query = '''
+    SELECT ?painter ?painterLabel WHERE {
+      ?painter wdt:P31 wd:Q5;          
+              wdt:P106 wd:Q1028181.   
+      SERVICE wikibase:label { bd:serviceParam wikibase:language "[AUTO_LANGUAGE],en". }
+    }'''
+
+  ```
+
+This query is to find painters. The conditions are: those profiles, which have instance of property (P31) "human" (Q5) and occupation (P106) painter (Q1028181). 
+
+
+### A more complex example
+Let's try on something bigger, using artists from the [PainterPalette](https://github.com/me9hanics/PainterPalette) dataset:
 
 
 ```python
