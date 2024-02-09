@@ -192,32 +192,42 @@ def get_person_info_retry_after(person_name, placeofbirth = True, dateofbirth = 
             data = response.json()
             results = data.get('results', {}).get('bindings', [])
             if results:
-                person_info = {
-                    'name': person_name,
-                    'birth_place': results[0].get('placeOfBirthLabel', {}).get('value', None),
-                    'birth_date': results[0].get('dateOfBirth', {}).get('value', None),
-                    'death_date': results[0].get('dateOfDeath', {}).get('value', None),
-                    'death_place': results[0].get('placeOfDeathLabel', {}).get('value', None),
-                    'gender': results[0].get('genderLabel', {}).get('value', None),
-                    'citizenship': results[0].get('citizenshipLabel', {}).get('value', None),
-                    'occupation': [],
-                    'work_locations': [],
-                }
+                person_info = {'name': person_name}
+            
+                if placeofbirth:
+                    person_info['birth_place'] = results[0].get('placeOfBirthLabel', {}).get('value', None)
+                if dateofbirth:
+                    person_info['birth_date'] = results[0].get('dateOfBirth', {}).get('value', None)
+                if dateofdeath:
+                    person_info['death_date'] = results[0].get('dateOfDeath', {}).get('value', None)
+                if placeofdeath:
+                    person_info['death_place'] = results[0].get('placeOfDeathLabel', {}).get('value', None)
+                if gender:
+                    person_info['gender'] = results[0].get('genderLabel', {}).get('value', None)
+                if citizenship:
+                    person_info['citizenship'] = results[0].get('citizenshipLabel', {}).get('value', None)
+                if occupation:
+                    person_info['occupation'] = []
+                if worklocation:
+                    person_info['work_locations'] = []
+            
                 for result in results:
-                    occupation = result.get('occupationLabel', {}).get('value', None)
-                    if occupation and occupation not in person_info['occupation']:
-                        person_info['occupation'].append(occupation)
+                    if occupation:
+                        occupation = result.get('occupationLabel', {}).get('value', None)
+                        if occupation and occupation not in person_info['occupation']:
+                            person_info['occupation'].append(occupation)
                     
-                    work_location = result.get('workLocationLabel', {}).get('value', None)
-                    if work_location:
-                        location_info = {
-                            'location': work_location,
-                            'start_time': result.get('startTime', {}).get('value', None),
-                            'end_time': result.get('endTime', {}).get('value', None),
-                            'point_in_time': result.get('pointInTime', {}).get('value', None),
-                        }
-                        if location_info not in person_info['work_locations']:
-                            person_info['work_locations'].append(location_info)
+                    if worklocation:
+                        work_location = result.get('workLocationLabel', {}).get('value', None)
+                        if work_location:
+                            location_info = {
+                                'location': work_location,
+                                'start_time': result.get('startTime', {}).get('value', None),
+                                'end_time': result.get('endTime', {}).get('value', None),
+                                'point_in_time': result.get('pointInTime', {}).get('value', None),
+                            }
+                            if location_info not in person_info['work_locations']:
+                                person_info['work_locations'].append(location_info)
                 return person_info
             break #Don't need to try again, we have the data
         else: #Some status codes are handled,it's fine now
