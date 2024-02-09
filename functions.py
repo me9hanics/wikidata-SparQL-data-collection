@@ -1,11 +1,17 @@
 def sparql_query(query,  retries=3, delay=10):
     import requests
     import time
+    import urllib3
 
     endpoint_url="https://query.wikidata.org/sparql"
     for attempt in range(retries):
-        response = requests.get(endpoint_url, params={'query': query, 'format': 'json'})
-        
+        try:
+            response = requests.get(endpoint_url, params={'query': query, 'format': 'json'})
+        except urllib3.exceptions.ProtocolError as e:
+            print("Likely what happened: ProtocolError: ('Connection aborted.', RemoteDisconnected('Remote end closed connection without response'))")
+            print("Probably too big query, try using the chunked query function instead")
+            break
+
         if response.status_code == 200: #Successful
             return response.json()
         else: #Some status codes could be handled handled, it's fine now to only handle time based status codes
@@ -173,36 +179,15 @@ def get_all_person_info(person_name, endpoint_url="https://query.wikidata.org/sp
     return None
 
 
-def get_person_info_retry_after(person_name,  endpoint_url="https://query.wikidata.org/sparql", retries=3):
+def get_person_info_retry_after(person_name, placeofbirth = True, dateofbirth = True, dateofdeath = True, placeofdeath = True, worklocation=True, gender=True, citizenship=True, occupation=True, endpoint_url="https://query.wikidata.org/sparql", retries=3):
     import requests
     import time
 
-    #SPARQL query
-    query_SELECT = ''' SELECT ?person ?personLabel ?placeOfBirthLabel ?dateOfBirth ?dateOfDeath ?placeOfDeathLabel ?workLocationLabel ?startTime ?endTime'''
-    query_WHERE = '''
-    SELECT ?person ?personLabel ?placeOfBirthLabel ?dateOfBirth ?dateOfDeath ?placeOfDeathLabel ?workLocationLabel ?startTime ?endTime ?pointInTime ?genderLabel ?citizenshipLabel ?occupationLabel WHERE {
-      ?person ?label "%s"@en.
-      ?person wdt:P19 ?placeOfBirth.
-      ?person wdt:P569 ?dateOfBirth.
-      ?person wdt:P570 ?dateOfDeath.
-      ?person wdt:P20 ?placeOfDeath.
-      OPTIONAL { ?person wdt:P21 ?gender. }
-      OPTIONAL { ?person wdt:P27 ?citizenship. }
-      OPTIONAL { ?person wdt:P106 ?occupation. }
-      OPTIONAL {
-        ?person p:P937 ?workStmt.
-        ?workStmt ps:P937 ?workLocation.
-        OPTIONAL { ?workStmt pq:P580 ?startTime. }
-        OPTIONAL { ?workStmt pq:P582 ?endTime. }
-        OPTIONAL { ?workStmt pq:P585 ?pointInTime. }
-      }
-      SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
-    }
-    ''' % person_name.replace('"', '\"') #For the "%s"@en part, the person_name is put in there, but for quotation marks, they are escaped with a backslash (regex-like)
+    query = get_query_from_input(person_name, placeofbirth, dateofbirth, dateofdeath, placeofdeath, worklocation, gender, citizenship, occupation)
 
     for attempt in range(retries):
         response = requests.get(endpoint_url, params={'query': query, 'format': 'json'})
-        
+
         if response.status_code == 200: #Successful
             data = response.json()
             results = data.get('results', {}).get('bindings', [])
