@@ -234,6 +234,7 @@ def get_person_info_retry_after(person_name, placeofbirth = True, dateofbirth = 
             print(f"Error fetching data for {person_name}, status code: {response.status_code}.")
             if response.status_code in [429, 500, 502, 503, 504]:
                 print(f"Attempt {attempt + 1} of {retries}.")
+                delay = 60
                 if response.status_code == 429:
                     retry_after = response.headers.get('Retry-After')
                     if retry_after:
