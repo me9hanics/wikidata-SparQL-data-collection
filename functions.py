@@ -47,6 +47,7 @@ def sparql_query_retry_after(query,  retries=3):
             print(f"Error fetching data, status code: {response.status_code}.")
             if response.status_code in [429, 500, 502, 503, 504]:
                 print(f"Attempt {attempt + 1} of {retries}.")
+                delay = 1
                 if response.status_code == 429:
                     retry_after = response.headers.get('Retry-After')
                     if retry_after:
