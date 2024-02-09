@@ -60,6 +60,47 @@ def sparql_query_retry_after(query,  retries=3):
     return None
 
 
+def get_query_from_input(person, placeofbirth = True, dateofbirth = True, dateofdeath = True, placeofdeath = True, worklocation=True, gender=True, citizenship=True, occupation=True):
+    query = "SELECT ?person ?personLabel"
+    if placeofbirth:
+        query += " ?placeOfBirthLabel"
+    if dateofbirth:
+        query += " ?dateOfBirth"
+    if dateofdeath:
+        query += " ?dateOfDeath"
+    if placeofdeath:
+        query += " ?placeOfDeathLabel"
+    if worklocation: #Optional, need to be handled differently
+        query += " ?workLocationLabel ?startTime ?endTime ?pointInTime"
+    if gender:
+        query += " ?genderLabel"
+    if citizenship:
+        query += " ?citizenshipLabel"
+    if occupation:
+        query += " ?occupationLabel"
+
+    query += " WHERE {\n"
+    query += f'?person ?label "{person}"@en.\n'
+    if placeofbirth:
+        query += "?person wdt:P19 ?placeOfBirth.\n"
+    if dateofbirth:
+        query += "?person wdt:P569 ?dateOfBirth.\n"
+    if dateofdeath:
+        query += "?person wdt:P570 ?dateOfDeath.\n"
+    if placeofdeath:
+        query += "?person wdt:P20 ?placeOfDeath.\n"
+    if worklocation:
+        query += "OPTIONAL {\n?person p:P937 ?workStmt.\n?workStmt ps:P937 ?workLocation.\nOPTIONAL { ?workStmt pq:P580 ?startTime. }\nOPTIONAL { ?workStmt pq:P582 ?endTime. }\nOPTIONAL { ?workStmt pq:P585 ?pointInTime. }\n}\n"
+    if gender:
+        query += "OPTIONAL { ?person wdt:P21 ?gender. }\n"
+    if citizenship:
+        query += "OPTIONAL { ?person wdt:P27 ?citizenship. }\n"
+    if occupation:
+        query += "OPTIONAL { ?person wdt:P106 ?occupation. }\n"
+    query += "SERVICE wikibase:label { bd:serviceParam wikibase:language \"en\". }\n}"
+    return query
+
+
 def get_all_person_info(person_name, endpoint_url="https://query.wikidata.org/sparql", retries=3, delay=1):
     import requests
     import time
@@ -132,12 +173,13 @@ def get_all_person_info(person_name, endpoint_url="https://query.wikidata.org/sp
     return None
 
 
-def get_all_person_info_retry_after(person_name, endpoint_url="https://query.wikidata.org/sparql", retries=3):
+def get_person_info_retry_after(person_name,  endpoint_url="https://query.wikidata.org/sparql", retries=3):
     import requests
     import time
 
     #SPARQL query
-    query = '''
+    query_SELECT = ''' SELECT ?person ?personLabel ?placeOfBirthLabel ?dateOfBirth ?dateOfDeath ?placeOfDeathLabel ?workLocationLabel ?startTime ?endTime'''
+    query_WHERE = '''
     SELECT ?person ?personLabel ?placeOfBirthLabel ?dateOfBirth ?dateOfDeath ?placeOfDeathLabel ?workLocationLabel ?startTime ?endTime ?pointInTime ?genderLabel ?citizenshipLabel ?occupationLabel WHERE {
       ?person ?label "%s"@en.
       ?person wdt:P19 ?placeOfBirth.
