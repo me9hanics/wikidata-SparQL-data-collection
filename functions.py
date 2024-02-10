@@ -88,13 +88,13 @@ def get_query_from_input(person, placeofbirth = True, dateofbirth = True, dateof
     query += " WHERE {\n"
     query += f'?person ?label "{person}"@en.\n'
     if placeofbirth:
-        query += "?person wdt:P19 ?placeOfBirth.\n"
+        query += "OPTIONAL {?person wdt:P19 ?placeOfBirth. }\n"
     if dateofbirth:
-        query += "?person wdt:P569 ?dateOfBirth.\n"
+        query += "OPTIONAL {?person wdt:P569 ?dateOfBirth. }\n"
     if dateofdeath:
-        query += "?person wdt:P570 ?dateOfDeath.\n"
+        query += "OPTIONAL {?person wdt:P570 ?dateOfDeath. }\n"
     if placeofdeath:
-        query += "?person wdt:P20 ?placeOfDeath.\n"
+        query += "OPTIONAL {?person wdt:P20 ?placeOfDeath. }\n"
     if worklocation:
         query += "OPTIONAL {\n?person p:P937 ?workStmt.\n?workStmt ps:P937 ?workLocation.\nOPTIONAL { ?workStmt pq:P580 ?startTime. }\nOPTIONAL { ?workStmt pq:P582 ?endTime. }\nOPTIONAL { ?workStmt pq:P585 ?pointInTime. }\n}\n"
     if gender:
@@ -115,10 +115,10 @@ def get_all_person_info(person_name, endpoint_url="https://query.wikidata.org/sp
     query = '''
     SELECT ?person ?personLabel ?placeOfBirthLabel ?dateOfBirth ?dateOfDeath ?placeOfDeathLabel ?workLocationLabel ?startTime ?endTime ?pointInTime ?genderLabel ?citizenshipLabel ?occupationLabel WHERE {
       ?person ?label "%s"@en.
-      ?person wdt:P19 ?placeOfBirth.
-      ?person wdt:P569 ?dateOfBirth.
-      ?person wdt:P570 ?dateOfDeath.
-      ?person wdt:P20 ?placeOfDeath.
+      OPTIONAL {?person wdt:P19 ?placeOfBirth. }
+      OPTIONAL {?person wdt:P569 ?dateOfBirth. }
+      OPTIONAL {?person wdt:P570 ?dateOfDeath. }
+      OPTIONAL {?person wdt:P20 ?placeOfDeath. }
       OPTIONAL { ?person wdt:P21 ?gender. }
       OPTIONAL { ?person wdt:P27 ?citizenship. }
       OPTIONAL { ?person wdt:P106 ?occupation. }
@@ -177,6 +177,38 @@ def get_all_person_info(person_name, endpoint_url="https://query.wikidata.org/sp
                 break
 
     return None
+
+
+def get_multiple_people_all_info(people, retries=3, delay=60):
+    #First, reduce the number of people in one query
+    chunks = [people[i:i + 150] for i in range(0, len(people), 150)]
+    responses = []
+    for chunk in chunks:
+        people_string = ' '.join(f'"{p}"' for p in chunk)
+        query = f'''
+        SELECT ?person ?personLabel ?placeOfBirthLabel ?dateOfBirth ?dateOfDeath ?placeOfDeathLabel ?workLocationLabel ?startTime ?endTime ?pointInTime ?genderLabel ?citizenshipLabel ?occupationLabel WHERE {{
+          VALUES ?personLabel {{ {people_string} }}
+          ?person ?label ?personLabel.
+          ?person wdt:P19 ?placeOfBirth.
+          ?person wdt:P569 ?dateOfBirth.
+          ?person wdt:P570 ?dateOfDeath.
+          ?person wdt:P20 ?placeOfDeath.
+          OPTIONAL {{ ?person wdt:P21 ?gender. }}
+          OPTIONAL {{ ?person wdt:P27 ?citizenship. }}
+          OPTIONAL {{ ?person wdt:P106 ?occupation. }}
+          OPTIONAL {{
+            ?person p:P937 ?workStmt.
+            ?workStmt ps:P937 ?workLocation.
+            OPTIONAL {{ ?workStmt pq:P580 ?startTime. }}
+            OPTIONAL {{ ?workStmt pq:P582 ?endTime. }}
+            OPTIONAL {{ ?workStmt pq:P585 ?pointInTime. }}
+          }}
+          SERVICE wikibase:label {{ bd:serviceParam wikibase:language "en". }}
+        }}
+        '''
+        response_json = sparql_query(query, retries, delay)
+        responses.append(response_json)
+    return responses
 
 
 def get_person_info_retry_after(person_name, placeofbirth = True, dateofbirth = True, dateofdeath = True, placeofdeath = True, worklocation=True, gender=True, citizenship=True, occupation=True, endpoint_url="https://query.wikidata.org/sparql", retries=3):
