@@ -299,11 +299,17 @@ def get_person_info_retry_after(person_name, placeofbirth = True, dateofbirth = 
             data = response.json()
             results = data.get('results', {}).get('bindings', [])
             if results:
-                person_info = {'name': person_name}
-                if occupation:
-                    person_info['occupation'] = []
-                if worklocation:
-                    person_info['work_locations'] = []
+                person_info = {
+                    'name': person_name,
+                    'birth_place': None,
+                    'birth_date': None,
+                    'death_date': None,
+                    'death_place': None,
+                    'gender': None,
+                    'citizenship': None,
+                    'occupation': [],
+                    'work_locations': []
+                }
 
                 for result in results:
                     if placeofbirth:
