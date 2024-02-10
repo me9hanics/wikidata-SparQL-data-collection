@@ -179,7 +179,7 @@ def get_all_person_info(person_name, endpoint_url="https://query.wikidata.org/sp
     return None
 
 
-def get_multiple_people_all_info(people, retries=3, delay=60):
+def get_multiple_people_all_info_separate_responses(people, retries=3, delay=60):
     #First, reduce the number of people in one query
     chunks = [people[i:i + 150] for i in range(0, len(people), 150)]
     responses = []
@@ -209,6 +209,68 @@ def get_multiple_people_all_info(people, retries=3, delay=60):
         response_json = sparql_query(query, retries, delay)
         responses.append(response_json)
     return responses
+
+
+def get_multiple_people_all_info(people, retries=3, delay=60):
+    # First, reduce the number of people in one query
+    chunks = [people[i:i + 150] for i in range(0, len(people), 150)]
+    all_people_info = []
+    for chunk in chunks:
+        people_string = ' '.join(f'"{p}"' for p in chunk)
+        query = f'''
+        SELECT ?person ?personLabel ?placeOfBirthLabel ?dateOfBirth ?dateOfDeath ?placeOfDeathLabel ?workLocationLabel ?startTime ?endTime ?pointInTime ?genderLabel ?citizenshipLabel ?occupationLabel WHERE {{
+          VALUES ?personLabel {{ {people_string} }}
+          ?person ?label ?personLabel.
+          ?person wdt:P19 ?placeOfBirth.
+          ?person wdt:P569 ?dateOfBirth.
+          ?person wdt:P570 ?dateOfDeath.
+          ?person wdt:P20 ?placeOfDeath.
+          OPTIONAL {{ ?person wdt:P21 ?gender. }}
+          OPTIONAL {{ ?person wdt:P27 ?citizenship. }}
+          OPTIONAL {{ ?person wdt:P106 ?occupation. }}
+          OPTIONAL {{
+            ?person p:P937 ?workStmt.
+            ?workStmt ps:P937 ?workLocation.
+            OPTIONAL {{ ?workStmt pq:P580 ?startTime. }}
+            OPTIONAL {{ ?workStmt pq:P582 ?endTime. }}
+            OPTIONAL {{ ?workStmt pq:P585 ?pointInTime. }}
+          }}
+          SERVICE wikibase:label {{ bd:serviceParam wikibase:language "en". }}
+        }}
+        '''
+        response_json = sparql_query(query, retries, delay)
+        results = response_json.get('results', {}).get('bindings', [])
+        for person_name in chunk:
+            person_results = [r for r in results if r.get('personLabel', {}).get('value') == person_name]
+            if person_results:
+                person_info = {
+                    'name': person_name,
+                    'birth_place': person_results[0].get('placeOfBirthLabel', {}).get('value', None),
+                    'birth_date': person_results[0].get('dateOfBirth', {}).get('value', None),
+                    'death_date': person_results[0].get('dateOfDeath', {}).get('value', None),
+                    'death_place': person_results[0].get('placeOfDeathLabel', {}).get('value', None),
+                    'gender': person_results[0].get('genderLabel', {}).get('value', None),
+                    'citizenship': person_results[0].get('citizenshipLabel', {}).get('value', None),
+                    'occupation': [],
+                    'work_locations': [],
+                }
+                for result in person_results:
+                    occupation = result.get('occupationLabel', {}).get('value', None)
+                    if occupation and occupation not in person_info['occupation']:
+                        person_info['occupation'].append(occupation)
+                    
+                    work_location = result.get('workLocationLabel', {}).get('value', None)
+                    if work_location:
+                        location_info = {
+                            'location': work_location,
+                            'start_time': result.get('startTime', {}).get('value', None),
+                            'end_time': result.get('endTime', {}).get('value', None),
+                            'point_in_time': result.get('pointInTime', {}).get('value', None),
+                        }
+                        if location_info not in person_info['work_locations']:
+                            person_info['work_locations'].append(location_info)
+                all_people_info.append(person_info)
+    return all_people_info
 
 
 def get_person_info_retry_after(person_name, placeofbirth = True, dateofbirth = True, dateofdeath = True, placeofdeath = True, worklocation=True, gender=True, citizenship=True, occupation=True, endpoint_url="https://query.wikidata.org/sparql", retries=3):
