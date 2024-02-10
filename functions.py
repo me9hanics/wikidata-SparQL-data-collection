@@ -388,8 +388,7 @@ def find_year(string):
     year = None
     if string is not None:
         year = re.findall(r"\d+(?=-)", string) #Until the first dash, match
-        if year != []:
-            year = int(year[0])
+        year = int(year[0]) if year != [] else None
     return year
 
 
