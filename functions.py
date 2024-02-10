@@ -142,16 +142,29 @@ def get_all_person_info(person_name, endpoint_url="https://query.wikidata.org/sp
             if results:
                 person_info = {
                     'name': person_name,
-                    'birth_place': results[0].get('placeOfBirthLabel', {}).get('value', None),
-                    'birth_date': results[0].get('dateOfBirth', {}).get('value', None),
-                    'death_date': results[0].get('dateOfDeath', {}).get('value', None),
-                    'death_place': results[0].get('placeOfDeathLabel', {}).get('value', None),
-                    'gender': results[0].get('genderLabel', {}).get('value', None),
-                    'citizenship': results[0].get('citizenshipLabel', {}).get('value', None),
+                    'birth_place': None,
+                    'birth_date': None,
+                    'death_date': None,
+                    'death_place': None,
+                    'gender': None,
+                    'citizenship': None,
                     'occupation': [],
                     'work_locations': [],
                 }
                 for result in results:
+                    if not person_info['birth_place']:
+                        person_info['birth_place'] = result.get('placeOfBirthLabel', {}).get('value', None)
+                    if not person_info['birth_date']:
+                        person_info['birth_date'] = result.get('dateOfBirth', {}).get('value', None)
+                    if not person_info['death_date']:
+                        person_info['death_date'] = result.get('dateOfDeath', {}).get('value', None)
+                    if not person_info['death_place']:
+                        person_info['death_place'] = result.get('placeOfDeathLabel', {}).get('value', None)
+                    if not person_info['gender']:
+                        person_info['gender'] = result.get('genderLabel', {}).get('value', None)
+                    if not person_info['citizenship']:
+                        person_info['citizenship'] = result.get('citizenshipLabel', {}).get('value', None)
+            
                     occupation = result.get('occupationLabel', {}).get('value', None)
                     if occupation and occupation not in person_info['occupation']:
                         person_info['occupation'].append(occupation)
