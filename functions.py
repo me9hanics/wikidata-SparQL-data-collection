@@ -300,30 +300,40 @@ def get_person_info_retry_after(person_name, placeofbirth = True, dateofbirth = 
             results = data.get('results', {}).get('bindings', [])
             if results:
                 person_info = {'name': person_name}
-            
-                if placeofbirth:
-                    person_info['birth_place'] = results[0].get('placeOfBirthLabel', {}).get('value', None)
-                if dateofbirth:
-                    person_info['birth_date'] = results[0].get('dateOfBirth', {}).get('value', None)
-                if dateofdeath:
-                    person_info['death_date'] = results[0].get('dateOfDeath', {}).get('value', None)
-                if placeofdeath:
-                    person_info['death_place'] = results[0].get('placeOfDeathLabel', {}).get('value', None)
-                if gender:
-                    person_info['gender'] = results[0].get('genderLabel', {}).get('value', None)
-                if citizenship:
-                    person_info['citizenship'] = results[0].get('citizenshipLabel', {}).get('value', None)
                 if occupation:
                     person_info['occupation'] = []
                 if worklocation:
                     person_info['work_locations'] = []
-            
+
                 for result in results:
+                    if placeofbirth:
+                        birth_place = result.get('placeOfBirthLabel', {}).get('value', None)
+                        if birth_place:
+                            person_info['birth_place'] = birth_place
+                    if dateofbirth:
+                        birth_date = result.get('dateOfBirth', {}).get('value', None)
+                        if birth_date:
+                            person_info['birth_date'] = birth_date
+                    if dateofdeath:
+                        death_date = result.get('dateOfDeath', {}).get('value', None)
+                        if death_date:
+                            person_info['death_date'] = death_date
+                    if placeofdeath:
+                        death_place = result.get('placeOfDeathLabel', {}).get('value', None)
+                        if death_place:
+                            person_info['death_place'] = death_place
+                    if gender:
+                        gender = result.get('genderLabel', {}).get('value', None)
+                        if gender:
+                            person_info['gender'] = gender
+                    if citizenship:
+                        citizenship = result.get('citizenshipLabel', {}).get('value', None)
+                        if citizenship:
+                            person_info['citizenship'] = citizenship
                     if occupation:
                         occupation = result.get('occupationLabel', {}).get('value', None)
                         if occupation and occupation not in person_info['occupation']:
                             person_info['occupation'].append(occupation)
-                    
                     if worklocation:
                         work_location = result.get('workLocationLabel', {}).get('value', None)
                         if work_location:
