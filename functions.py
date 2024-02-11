@@ -286,12 +286,11 @@ def get_multiple_people_all_info(people, retries=3, delay=60):
     return all_people_info
 
 
-def get_person_info_retry_after(person_name, placeofbirth = True, dateofbirth = True, dateofdeath = True, placeofdeath = True, worklocation=True, gender=True, citizenship=True, occupation=True, endpoint_url="https://query.wikidata.org/sparql", retries=3):
+def get_person_info_retry_after(person_name, placeofbirth_return = True, dateofbirth_return = True, dateofdeath_return = True, placeofdeath_return = True, worklocation_return=True, gender_return=True, citizenship_return=True, occupation_return=True, endpoint_url="https://query.wikidata.org/sparql", retries=3):
     import requests
     import time
 
-    query = get_query_from_input(person_name, placeofbirth, dateofbirth, dateofdeath, placeofdeath, worklocation, gender, citizenship, occupation)
-
+    query = get_query_from_input(person_name, placeofbirth_return, dateofbirth_return, dateofdeath_return, placeofdeath_return, worklocation_return, gender_return, citizenship_return, occupation_return)
     for attempt in range(retries):
         response = requests.get(endpoint_url, params={'query': query, 'format': 'json'})
 
@@ -312,35 +311,23 @@ def get_person_info_retry_after(person_name, placeofbirth = True, dateofbirth = 
                 }
 
                 for result in results:
-                    if placeofbirth:
-                        birth_place = result.get('placeOfBirthLabel', {}).get('value', None)
-                        if birth_place:
-                            person_info['birth_place'] = birth_place
-                    if dateofbirth:
-                        birth_date = result.get('dateOfBirth', {}).get('value', None)
-                        if birth_date:
-                            person_info['birth_date'] = birth_date
-                    if dateofdeath:
-                        death_date = result.get('dateOfDeath', {}).get('value', None)
-                        if death_date:
-                            person_info['death_date'] = death_date
-                    if placeofdeath:
-                        death_place = result.get('placeOfDeathLabel', {}).get('value', None)
-                        if death_place:
-                            person_info['death_place'] = death_place
-                    if gender:
-                        gender = result.get('genderLabel', {}).get('value', None)
-                        if gender:
-                            person_info['gender'] = gender
-                    if citizenship:
-                        citizenship = result.get('citizenshipLabel', {}).get('value', None)
-                        if citizenship:
-                            person_info['citizenship'] = citizenship
-                    if occupation:
+                    if placeofbirth_return and not person_info['birth_place']:
+                        person_info['birth_place'] = result.get('placeOfBirthLabel', {}).get('value', None)
+                    if dateofbirth_return and not person_info['birth_date']:
+                        person_info['birth_date'] = result.get('dateOfBirth', {}).get('value', None)
+                    if dateofdeath_return and not person_info['death_date']:
+                        person_info['death_date'] = result.get('dateOfDeath', {}).get('value', None)
+                    if placeofdeath_return and not person_info['death_place']:
+                        person_info['death_place'] = result.get('placeOfDeathLabel', {}).get('value', None)
+                    if gender_return and not person_info['gender']:
+                        person_info['gender'] = result.get('genderLabel', {}).get('value', None)
+                    if citizenship_return and not person_info['citizenship']:
+                        person_info['citizenship'] = result.get('citizenshipLabel', {}).get('value', None)
+                    if occupation_return:
                         occupation = result.get('occupationLabel', {}).get('value', None)
                         if occupation and occupation not in person_info['occupation']:
                             person_info['occupation'].append(occupation)
-                    if worklocation:
+                    if worklocation_return:
                         work_location = result.get('workLocationLabel', {}).get('value', None)
                         if work_location:
                             location_info = {
