@@ -107,6 +107,49 @@ def get_query_from_input(person, placeofbirth = True, dateofbirth = True, dateof
     return query
 
 
+def create_person_info_from_results(person_name, person_results):
+    person_info = {
+        'name': person_name,
+        'birth_place': None,
+        'birth_date': None,
+        'death_date': None,
+        'death_place': None,
+        'gender': None,
+        'citizenship': None,
+        'occupation': [],
+        'work_locations': [],
+    }
+    for result in person_results:
+        if not person_info['birth_place']:
+            person_info['birth_place'] = result.get('placeOfBirthLabel', {}).get('value', None)
+        if not person_info['birth_date']:
+            person_info['birth_date'] = result.get('dateOfBirth', {}).get('value', None)
+        if not person_info['death_date']:
+            person_info['death_date'] = result.get('dateOfDeath', {}).get('value', None)
+        if not person_info['death_place']:
+            person_info['death_place'] = result.get('placeOfDeathLabel', {}).get('value', None)
+        if not person_info['gender']:
+            person_info['gender'] = result.get('genderLabel', {}).get('value', None)
+        if not person_info['citizenship']:
+            person_info['citizenship'] = result.get('citizenshipLabel', {}).get('value', None)
+
+        occupation = result.get('occupationLabel', {}).get('value', None)
+        if occupation and occupation not in person_info['occupation']:
+            person_info['occupation'].append(occupation)
+
+        work_location = result.get('workLocationLabel', {}).get('value', None)
+        if work_location:
+            location_info = {
+                'location': work_location,
+                'start_time': result.get('startTime', {}).get('value', None),
+                'end_time': result.get('endTime', {}).get('value', None),
+                'point_in_time': result.get('pointInTime', {}).get('value', None),
+            }
+            if location_info not in person_info['work_locations']:
+                person_info['work_locations'].append(location_info)
+    return person_info
+
+
 def get_all_person_info(person_name, endpoint_url="https://query.wikidata.org/sparql", retries=3, delay=1):
     import requests
     import time
@@ -139,7 +182,7 @@ def get_all_person_info(person_name, endpoint_url="https://query.wikidata.org/sp
         if response.status_code == 200: #Successful
             data = response.json()
             results = data.get('results', {}).get('bindings', [])
-            if results:
+            if results: #We could just use create_person_info_from_results here, but I keep the current code to not break anything
                 person_info = {
                     'name': person_name,
                     'birth_place': None,
@@ -225,46 +268,8 @@ def get_all_person_info_by_id(person_id, endpoint_url="https://query.wikidata.or
             data = response.json()
             results = data.get('results', {}).get('bindings', [])
             if results:
-                person_info = {
-                    'id': person_id,
-                    'name': None,
-                    'birth_place': None,
-                    'birth_date': None,
-                    'death_date': None,
-                    'death_place': None,
-                    'gender': None,
-                    'citizenship': None,
-                    'occupation': [],
-                    'work_locations': [],
-                }
-                for result in results:
-                    if not person_info['name']:
-                        person_info['name'] = result.get('personLabel', {}).get('value', None)
-                    if not person_info['birth_date']:
-                        person_info['birth_date'] = result.get('dateOfBirth', {}).get('value', None)
-                    if not person_info['death_date']:
-                        person_info['death_date'] = result.get('dateOfDeath', {}).get('value', None)
-                    if not person_info['death_place']:
-                        person_info['death_place'] = result.get('placeOfDeathLabel', {}).get('value', None)
-                    if not person_info['gender']:
-                        person_info['gender'] = result.get('genderLabel', {}).get('value', None)
-                    if not person_info['citizenship']:
-                        person_info['citizenship'] = result.get('citizenshipLabel', {}).get('value', None)
-            
-                    occupation = result.get('occupationLabel', {}).get('value', None)
-                    if occupation and occupation not in person_info['occupation']:
-                        person_info['occupation'].append(occupation)
-                    
-                    work_location = result.get('workLocationLabel', {}).get('value', None)
-                    if work_location:
-                        location_info = {
-                            'location': work_location,
-                            'start_time': result.get('startTime', {}).get('value', None),
-                            'end_time': result.get('endTime', {}).get('value', None),
-                            'point_in_time': result.get('pointInTime', {}).get('value', None),
-                        }
-                        if location_info not in person_info['work_locations']:
-                            person_info['work_locations'].append(location_info)
+                person_name = results[0].get('personLabel', {}).get('value', None)
+                person_info = create_person_info_from_results(person_name, results)
                 return person_info
             break #Don't need to try again, we have the data
         else: #Some status codes are handled,it's fine now
@@ -342,32 +347,7 @@ def get_multiple_people_all_info(people, retries=3, delay=60):
         for person_name in chunk:
             person_results = [r for r in results if r.get('personLabel', {}).get('value') == person_name]
             if person_results:
-                person_info = {
-                    'name': person_name,
-                    'birth_place': person_results[0].get('placeOfBirthLabel', {}).get('value', None),
-                    'birth_date': person_results[0].get('dateOfBirth', {}).get('value', None),
-                    'death_date': person_results[0].get('dateOfDeath', {}).get('value', None),
-                    'death_place': person_results[0].get('placeOfDeathLabel', {}).get('value', None),
-                    'gender': person_results[0].get('genderLabel', {}).get('value', None),
-                    'citizenship': person_results[0].get('citizenshipLabel', {}).get('value', None),
-                    'occupation': [],
-                    'work_locations': [],
-                }
-                for result in person_results:
-                    occupation = result.get('occupationLabel', {}).get('value', None)
-                    if occupation and occupation not in person_info['occupation']:
-                        person_info['occupation'].append(occupation)
-                    
-                    work_location = result.get('workLocationLabel', {}).get('value', None)
-                    if work_location:
-                        location_info = {
-                            'location': work_location,
-                            'start_time': result.get('startTime', {}).get('value', None),
-                            'end_time': result.get('endTime', {}).get('value', None),
-                            'point_in_time': result.get('pointInTime', {}).get('value', None),
-                        }
-                        if location_info not in person_info['work_locations']:
-                            person_info['work_locations'].append(location_info)
+                person_info = create_person_info_from_results(person_name, person_results)
                 all_people_info.append(person_info)
     return all_people_info
 
