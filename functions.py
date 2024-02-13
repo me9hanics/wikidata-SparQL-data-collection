@@ -227,6 +227,7 @@ def get_all_person_info_by_id(person_id, endpoint_url="https://query.wikidata.or
             if results:
                 person_info = {
                     'id': person_id,
+                    'name': None,
                     'birth_place': None,
                     'birth_date': None,
                     'death_date': None,
@@ -237,8 +238,8 @@ def get_all_person_info_by_id(person_id, endpoint_url="https://query.wikidata.or
                     'work_locations': [],
                 }
                 for result in results:
-                    if not person_info['birth_place']:
-                        person_info['birth_place'] = result.get('placeOfBirthLabel', {}).get('value', None)
+                    if not person_info['name']:
+                        person_info['name'] = result.get('personLabel', {}).get('value', None)
                     if not person_info['birth_date']:
                         person_info['birth_date'] = result.get('dateOfBirth', {}).get('value', None)
                     if not person_info['death_date']:
