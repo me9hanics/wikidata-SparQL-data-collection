@@ -192,6 +192,91 @@ def get_all_person_info(person_name, endpoint_url="https://query.wikidata.org/sp
     return None
 
 
+def get_all_person_info_by_id(person_id, endpoint_url="https://query.wikidata.org/sparql", retries=3, delay=1):
+    import requests
+    import time
+
+    #SPARQL query
+    query = '''
+    SELECT ?person ?personLabel ?placeOfBirthLabel ?dateOfBirth ?dateOfDeath ?placeOfDeathLabel ?workLocationLabel ?startTime ?endTime ?pointInTime ?genderLabel ?citizenshipLabel ?occupationLabel WHERE {
+      BIND(wd:%s AS ?person).
+      OPTIONAL {?person wdt:P19 ?placeOfBirth. }
+      OPTIONAL {?person wdt:P569 ?dateOfBirth. }
+      OPTIONAL {?person wdt:P570 ?dateOfDeath. }
+      OPTIONAL {?person wdt:P20 ?placeOfDeath. }
+      OPTIONAL { ?person wdt:P21 ?gender. }
+      OPTIONAL { ?person wdt:P27 ?citizenship. }
+      OPTIONAL { ?person wdt:P106 ?occupation. }
+      OPTIONAL {
+        ?person p:P937 ?workStmt.
+        ?workStmt ps:P937 ?workLocation.
+        OPTIONAL { ?workStmt pq:P580 ?startTime. }
+        OPTIONAL { ?workStmt pq:P582 ?endTime. }
+        OPTIONAL { ?workStmt pq:P585 ?pointInTime. }
+      }
+      SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+    }
+    ''' % person_id
+
+    for attempt in range(retries):
+        response = requests.get(endpoint_url, params={'query': query, 'format': 'json'})
+        
+        if response.status_code == 200: #Successful
+            data = response.json()
+            results = data.get('results', {}).get('bindings', [])
+            if results:
+                person_info = {
+                    'id': person_id,
+                    'birth_place': None,
+                    'birth_date': None,
+                    'death_date': None,
+                    'death_place': None,
+                    'gender': None,
+                    'citizenship': None,
+                    'occupation': [],
+                    'work_locations': [],
+                }
+                for result in results:
+                    if not person_info['birth_place']:
+                        person_info['birth_place'] = result.get('placeOfBirthLabel', {}).get('value', None)
+                    if not person_info['birth_date']:
+                        person_info['birth_date'] = result.get('dateOfBirth', {}).get('value', None)
+                    if not person_info['death_date']:
+                        person_info['death_date'] = result.get('dateOfDeath', {}).get('value', None)
+                    if not person_info['death_place']:
+                        person_info['death_place'] = result.get('placeOfDeathLabel', {}).get('value', None)
+                    if not person_info['gender']:
+                        person_info['gender'] = result.get('genderLabel', {}).get('value', None)
+                    if not person_info['citizenship']:
+                        person_info['citizenship'] = result.get('citizenshipLabel', {}).get('value', None)
+            
+                    occupation = result.get('occupationLabel', {}).get('value', None)
+                    if occupation and occupation not in person_info['occupation']:
+                        person_info['occupation'].append(occupation)
+                    
+                    work_location = result.get('workLocationLabel', {}).get('value', None)
+                    if work_location:
+                        location_info = {
+                            'location': work_location,
+                            'start_time': result.get('startTime', {}).get('value', None),
+                            'end_time': result.get('endTime', {}).get('value', None),
+                            'point_in_time': result.get('pointInTime', {}).get('value', None),
+                        }
+                        if location_info not in person_info['work_locations']:
+                            person_info['work_locations'].append(location_info)
+                return person_info
+            break #Don't need to try again, we have the data
+        else: #Some status codes are handled,it's fine now
+            print(f"Error fetching data for {person_id}, status code: {response.status_code}.")
+            if response.status_code in [429, 500, 502, 503, 504]:
+                print(f"Attempt {attempt + 1} of {retries}.")
+                time.sleep(delay)
+            else:
+                break
+
+    return None
+
+
 def get_multiple_people_all_info_separate_responses(people, retries=3, delay=60):
     #First, reduce the number of people in one query
     chunks = [people[i:i + 150] for i in range(0, len(people), 150)]
