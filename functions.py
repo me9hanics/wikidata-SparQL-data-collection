@@ -1,8 +1,9 @@
-def sparql_query(query,  retries=3, delay=10):
-    import requests
-    import time
-    import urllib3
+import requests
+import time
+import urllib3
+import re
 
+def sparql_query(query,  retries=3, delay=10):
     endpoint_url="https://query.wikidata.org/sparql"
     for attempt in range(retries):
         try:
@@ -28,7 +29,6 @@ def sparql_query(query,  retries=3, delay=10):
 
 #Example dict: {'painter': "wdt:P31 wd:Q5;", ... }
 def sparql_query_by_dict(variable_names, WHERE_dict, endpoint_url="https://query.wikidata.org/sparql", retries=3, delay=10):
-    from functions import sparql_query
     select = "SELECT " + " ".join([f"?{name}" for name in variable_names])
     where = " WHERE {\n"
     for variable, value in WHERE_dict.items():
@@ -40,8 +40,6 @@ def sparql_query_by_dict(variable_names, WHERE_dict, endpoint_url="https://query
 
 
 def sparql_query_retry_after(query,  retries=3):
-    import requests
-    import time
 
     endpoint_url="https://query.wikidata.org/sparql"
     for attempt in range(retries):
@@ -151,8 +149,6 @@ def create_person_info_from_results(person_name, person_results):
 
 
 def get_all_person_info(person_name, endpoint_url="https://query.wikidata.org/sparql", retries=3, delay=1):
-    import requests
-    import time
 
     #SPARQL query
     query = '''
@@ -235,10 +231,38 @@ def get_all_person_info(person_name, endpoint_url="https://query.wikidata.org/sp
     return None
 
 
-def get_all_person_info_by_id(person_id, endpoint_url="https://query.wikidata.org/sparql", retries=3, delay=1):
-    import requests
-    import time
+def get_person_wikidata_name(person_name, retries = 3, delay = 1):
+    query = '''
+    SELECT ?person ?personLabel WHERE{
+     ?person ?label "%s"@en.
+    }
+    '''% person_name.replace('"', '\"')
+    for attempt in range(retries):
+        response = requests.get("https://query.wikidata.org/sparql", params={'query': query, 'format': 'json'})
+        if response.status_code == 200: #Successful
+            data = response.json()
+            results = data.get('results', {}).get('bindings', [])
+            if results:
+                wikidata_name = None
+                for result in results:
+                    result.get('personLabel', {}).get('value', None)
+                    if result:
+                        wikidata_name = result
+                        return wikidata_name
+        elif response.status_code in [429, 500, 502, 503, 504]:
+            time.sleep(delay)
+        else:
+            return None
+    return None
 
+
+def get_person_aliases(person_name):
+    #TODO
+    #both aliases - and different language names
+    pass
+
+
+def get_all_person_info_by_id(person_id, endpoint_url="https://query.wikidata.org/sparql", retries=3, delay=1):
     #SPARQL query
     query = '''
     SELECT ?person ?personLabel ?placeOfBirthLabel ?dateOfBirth ?dateOfDeath ?placeOfDeathLabel ?workLocationLabel ?startTime ?endTime ?pointInTime ?genderLabel ?citizenshipLabel ?occupationLabel WHERE {
@@ -353,9 +377,6 @@ def get_multiple_people_all_info(people, retries=3, delay=60):
 
 
 def get_person_info_retry_after(person_name, placeofbirth_return = True, dateofbirth_return = True, dateofdeath_return = True, placeofdeath_return = True, worklocation_return=True, gender_return=True, citizenship_return=True, occupation_return=True, endpoint_url="https://query.wikidata.org/sparql", retries=3):
-    import requests
-    import time
-
     query = get_query_from_input(person_name, placeofbirth_return, dateofbirth_return, dateofdeath_return, placeofdeath_return, worklocation_return, gender_return, citizenship_return, occupation_return)
     for attempt in range(retries):
         response = requests.get(endpoint_url, params={'query': query, 'format': 'json'})
@@ -423,9 +444,6 @@ def get_person_info_retry_after(person_name, placeofbirth_return = True, dateofb
 
 
 def get_person_info(person_name, endpoint_url="https://query.wikidata.org/sparql", retries=3, delay=1):
-    import requests
-    import time
-
     #SPARQL query
     query = '''
     SELECT ?person ?personLabel ?placeOfBirthLabel ?dateOfBirth ?dateOfDeath ?placeOfDeathLabel ?workLocationLabel ?startTime ?endTime ?pointInTime WHERE {
@@ -486,9 +504,6 @@ def get_person_info(person_name, endpoint_url="https://query.wikidata.org/sparql
 
 
 def get_person_locations(person_name, endpoint_url="https://query.wikidata.org/sparql", retries=3, delay=1):
-    import requests
-    import time
-
     #SPARQL query
     query = '''
     SELECT ?person ?personLabel ?placeOfBirthLabel ?placeOfDeathLabel ?workLocationLabel ?startTime ?endTime ?pointInTime WHERE {
@@ -560,7 +575,6 @@ def get_places_from_response(response, quiet=True):
 
 
 def find_year(string):
-    import re
     year = None
     if string is not None:
         year = re.findall(r"\d+(?=-)", string) #Until the first dash, match
