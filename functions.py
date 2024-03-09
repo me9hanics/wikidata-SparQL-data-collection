@@ -245,9 +245,9 @@ def get_person_wikidata_name(person_name, retries = 3, delay = 1):
             if results:
                 wikidata_name = None
                 for result in results:
-                    result.get('personLabel', {}).get('value', None)
-                    if result:
-                        wikidata_name = result
+                    label = result.get('personLabel', {}).get('value', None)
+                    if label:
+                        wikidata_name = label
                         return wikidata_name
         elif response.status_code in [429, 500, 502, 503, 504]:
             time.sleep(delay)
