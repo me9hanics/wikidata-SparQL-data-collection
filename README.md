@@ -242,3 +242,9 @@ examples.drop(columns=["pictures_count","styles"])
 </div>
 
 
+<div align=center>
+    <br>For a reference on Wikidata keywords for querying, we can take a look at this picture taken from their website:<br>
+    <img src=https://github.com/me9hanics/sparql-wikidata-data-collection/assets/82604073/e621d955-210a-493d-a506-e1b9211f5d03 width=800 >
+</div>
+
+
