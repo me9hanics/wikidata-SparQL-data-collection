@@ -234,24 +234,28 @@ def get_all_person_info(person_name, endpoint_url="https://query.wikidata.org/sp
 def get_person_wikidata_name(person_name, retries = 3, delay = 1):
     query = '''
     SELECT ?person ?personLabel WHERE{
-     ?person ?label "%s"@en.
+    ?person ?label "%s"@en.
+    
+    SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
     }
     '''% person_name.replace('"', '\"')
+
     for attempt in range(retries):
         response = requests.get("https://query.wikidata.org/sparql", params={'query': query, 'format': 'json'})
+        
         if response.status_code == 200: #Successful
             data = response.json()
             results = data.get('results', {}).get('bindings', [])
             if results:
-                wikidata_name = None
                 for result in results:
+                    person = result.get('person', {}).get('value', None)
                     label = result.get('personLabel', {}).get('value', None)
-                    if label:
-                        wikidata_name = label
-                        return wikidata_name
-        elif response.status_code in [429, 500, 502, 503, 504]:
+                    if person and 'entity/Q' in person and label: #We get a ton of results, and almost all of them a gibberish, so we need to filter them
+                        return label
+        elif response.status_code in [408, 429, 500, 502, 503, 504]:
             time.sleep(delay)
-        else:
+        elif response.status_code in [400, 404]:
+            print("Error: %s"%response.status_code)
             return None
     return None
 
