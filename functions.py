@@ -260,6 +260,44 @@ def get_person_wikidata_name(person_name, retries = 3, delay = 1):
     return None
 
 
+def get_person_wikidata_name_fast(person_name, retries = 3, delay0 = 1,delay1=20, delay2 = 60):
+    query = '''
+    SELECT ?person ?personLabel WHERE{
+    ?person ?label "%s"@en.
+    
+    SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+    }
+    '''% person_name.replace('"', '\"')
+
+    for attempt in range(retries):
+        response = requests.get("https://query.wikidata.org/sparql", params={'query': query, 'format': 'json'})
+        
+        if response.status_code == 200: #Successful
+            data = response.json()
+            results = data.get('results', {}).get('bindings', [])
+            if results:
+                for result in results:
+                    person = result.get('person', {}).get('value', None)
+                    label = result.get('personLabel', {}).get('value', None)
+                    if person and 'entity/Q' in person and label: #We get a ton of results, and almost all of them a gibberish, so we need to filter them
+                        return label
+            else:
+                return None
+        elif response.status_code in [408, 429, 500, 502, 503, 504]:
+            
+            if attempt == 0:
+                time.sleep(delay0)
+            elif attempt == 1:
+                time.sleep(delay1)
+            elif attempt == 2:
+                time.sleep(delay2)
+            
+        elif response.status_code in [400, 404]:
+            print("Error: %s"%response.status_code, "person name: ", person_name)
+            return None
+    return None
+
+
 def get_person_aliases(person_name):
     #TODO
     #both aliases - and different language names
