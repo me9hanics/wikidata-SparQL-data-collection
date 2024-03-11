@@ -424,7 +424,7 @@ def get_multiple_people_all_info(people, retries=3, delay=60):
     return all_people_info
 
 
-def get_multiple_people_all_info_retry_missing(people, retries=3, delay=60):
+def get_multiple_people_all_info_fast_retry_missing(people, retries=3, delay=60):
     gathered_people_fast = get_multiple_people_all_info(people, retries, delay)
     collected_names = [gathered_people_fast[k]['name'] for k in range(len(gathered_people_fast))]
     missing_people = [p for p in people if p not in collected_names]
