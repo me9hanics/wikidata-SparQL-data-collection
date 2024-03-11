@@ -424,6 +424,19 @@ def get_multiple_people_all_info(people, retries=3, delay=60):
     return all_people_info
 
 
+def get_multiple_people_all_info_retry_missing(people, retries=3, delay=60):
+    gathered_people_fast = get_multiple_people_all_info(people, retries, delay)
+    collected_names = [gathered_people_fast[k]['name'] for k in range(len(gathered_people_fast))]
+    missing_people = [p for p in people if p not in collected_names]
+
+    gathered_people_slow = []
+    for person in missing_people:
+        person_info = get_all_person_info(person)
+        if person_info:
+            gathered_people_slow.append(person_info)
+
+    return gathered_people_fast + gathered_people_slow
+
 def get_person_info_retry_after(person_name, placeofbirth_return = True, dateofbirth_return = True, dateofdeath_return = True, placeofdeath_return = True, worklocation_return=True, gender_return=True, citizenship_return=True, occupation_return=True, endpoint_url="https://query.wikidata.org/sparql", retries=3):
     query = get_query_from_input(person_name, placeofbirth_return, dateofbirth_return, dateofdeath_return, placeofdeath_return, worklocation_return, gender_return, citizenship_return, occupation_return)
     for attempt in range(retries):
