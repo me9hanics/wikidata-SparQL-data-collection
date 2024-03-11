@@ -148,7 +148,7 @@ def create_person_info_from_results(person_name, person_results):
     return person_info
 
 
-def get_all_person_info(person_name, endpoint_url="https://query.wikidata.org/sparql", retries=3, delay=1):
+def get_all_person_info(person_name, endpoint_url="https://query.wikidata.org/sparql", retries=3, delay0=1, delay1=20, delay2=60):
 
     #SPARQL query
     query = '''
@@ -224,7 +224,13 @@ def get_all_person_info(person_name, endpoint_url="https://query.wikidata.org/sp
             print(f"Error fetching data for {person_name}, status code: {response.status_code}.")
             if response.status_code in [429, 500, 502, 503, 504]:
                 print(f"Attempt {attempt + 1} of {retries}.")
-                time.sleep(delay)
+                
+                if attempt == 0:
+                    time.sleep(delay0)
+                elif attempt == 1:
+                    time.sleep(delay1)
+                elif attempt == 2:
+                    time.sleep(delay2)
             else:
                 break
 
