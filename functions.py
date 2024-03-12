@@ -310,12 +310,12 @@ def get_person_aliases(person_name):
     pass
 
 
-def get_person_wikidata_id(person_name, retries = 3, delay = 1):
+def get_person_wikidata_id(person_name, retries = 3, delay0 = 1, delay1=20, delay2=60):
     query = '''
     SELECT ?person ?personLabel WHERE{
-    ?person ?label "%s"@en.
-    
-    SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+    ?person ?label "%s".
+    ?person wdt:P31 wd:Q5.  #Ensure it's an instance of human, could happen that it's a statue of the person or something
+    SERVICE wikibase:label { bd:serviceParam wikibase:language "[AUTO_LANGUAGE],*". }
     }
     '''% person_name.replace('"', '\"')
 
@@ -333,7 +333,12 @@ def get_person_wikidata_id(person_name, retries = 3, delay = 1):
                         wikidata_id = person.split('/')[-1] # Extract Wikidata ID from URL
                         return wikidata_id
         elif response.status_code in [408, 429, 500, 502, 503, 504]:
-            time.sleep(delay)
+            if attempt == 0:
+                time.sleep(delay0)
+            elif attempt == 1:
+                time.sleep(delay1)
+            elif attempt == 2:
+                time.sleep(delay2)
         elif response.status_code in [400, 404]:
             print("Error: %s"%response.status_code)
             return None
