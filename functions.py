@@ -240,9 +240,9 @@ def get_all_person_info(person_name, endpoint_url="https://query.wikidata.org/sp
 def get_person_wikidata_name(person_name, retries = 3, delay = 1):
     query = '''
     SELECT ?person ?personLabel WHERE{
-    ?person ?label "%s"@en.
-    
-    SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+    ?person ?label "%s".
+    ?person wdt:P31 wd:Q5.  #Ensure it's an instance of human, could happen that it's a statue of the person or something
+    SERVICE wikibase:label { bd:serviceParam wikibase:language "[AUTO_LANGUAGE],*". }
     }
     '''% person_name.replace('"', '\"')
 
@@ -270,7 +270,7 @@ def get_person_wikidata_name_fast(person_name, retries = 3, delay0 = 1,delay1=20
     query = '''
     SELECT ?person ?personLabel WHERE{
     ?person ?label "%s"@en.
-    
+    ?person wdt:P31 wd:Q5.  #Ensure it's an instance of human, could happen that it's a statue of the person or something
     SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
     }
     '''% person_name.replace('"', '\"')
