@@ -432,6 +432,7 @@ def get_multiple_people_all_info(people, retries=3, delay=60):
         SELECT ?person ?personLabel ?placeOfBirthLabel ?dateOfBirth ?dateOfDeath ?placeOfDeathLabel ?workLocationLabel ?startTime ?endTime ?pointInTime ?genderLabel ?citizenshipLabel ?occupationLabel WHERE {{
           VALUES ?personLabel {{ {people_string} }}
           ?person ?label ?personLabel.
+          ?person wdt:P31 wd:Q5.  #Ensure it's an instance of human, could happen that it's a statue of the person or something
           ?person wdt:P19 ?placeOfBirth.
           ?person wdt:P569 ?dateOfBirth.
           ?person wdt:P570 ?dateOfDeath.
