@@ -310,6 +310,36 @@ def get_person_aliases(person_name):
     pass
 
 
+def get_person_wikidata_id(person_name, retries = 3, delay = 1):
+    query = '''
+    SELECT ?person ?personLabel WHERE{
+    ?person ?label "%s"@en.
+    
+    SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+    }
+    '''% person_name.replace('"', '\"')
+
+    for attempt in range(retries):
+        response = requests.get("https://query.wikidata.org/sparql", params={'query': query, 'format': 'json'})
+        
+        if response.status_code == 200: #Successful
+            data = response.json()
+            results = data.get('results', {}).get('bindings', [])
+            if results:
+                for result in results:
+                    person = result.get('person', {}).get('value', None)
+                    label = result.get('personLabel', {}).get('value', None)
+                    if person and 'entity/Q' in person and label: #We get a ton of results, and almost all of them a gibberish, so we need to filter them
+                        wikidata_id = person.split('/')[-1] # Extract Wikidata ID from URL
+                        return wikidata_id
+        elif response.status_code in [408, 429, 500, 502, 503, 504]:
+            time.sleep(delay)
+        elif response.status_code in [400, 404]:
+            print("Error: %s"%response.status_code)
+            return None
+    return None
+
+
 def get_all_person_info_by_id(person_id, endpoint_url="https://query.wikidata.org/sparql", retries=3, delay=1):
     #SPARQL query
     query = '''
