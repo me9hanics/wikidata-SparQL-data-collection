@@ -236,6 +236,215 @@ def get_all_person_info(person_name, endpoint_url="https://query.wikidata.org/sp
 
     return None
 
+                
+def get_all_person_info_with_ID(person_name, endpoint_url="https://query.wikidata.org/sparql", retries=3, delay0=1, delay1=20, delay2=60, silent = True):
+
+    #SPARQL query
+    query = '''
+    SELECT ?person ?personLabel ?placeOfBirthLabel ?dateOfBirth ?dateOfDeath ?placeOfDeathLabel ?workLocationLabel ?startTime ?endTime ?pointInTime ?genderLabel ?citizenshipLabel ?occupationLabel WHERE {
+      ?person ?label "%s"@en.
+      ?person wdt:P31 wd:Q5.
+      OPTIONAL {?person wdt:P19 ?placeOfBirth. }
+      OPTIONAL {?person wdt:P569 ?dateOfBirth. }
+      OPTIONAL {?person wdt:P570 ?dateOfDeath. }
+      OPTIONAL {?person wdt:P20 ?placeOfDeath. }
+      OPTIONAL { ?person wdt:P21 ?gender. }
+      OPTIONAL { ?person wdt:P27 ?citizenship. }
+      OPTIONAL { ?person wdt:P106 ?occupation. }
+      OPTIONAL {
+        ?person p:P937 ?workStmt.
+        ?workStmt ps:P937 ?workLocation.
+        OPTIONAL { ?workStmt pq:P580 ?startTime. }
+        OPTIONAL { ?workStmt pq:P582 ?endTime. }
+        OPTIONAL { ?workStmt pq:P585 ?pointInTime. }
+      }
+      SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+    }
+    ''' % person_name.replace('"', '\"') #For the "%s"@en part, the person_name is put in there, but for quotation marks, they are escaped with a backslash (regex-like)
+
+    for attempt in range(retries):
+        response = requests.get(endpoint_url, params={'query': query, 'format': 'json'})
+        
+        if response.status_code == 200: #Successful
+            data = response.json()
+            results = data.get('results', {}).get('bindings', [])
+            if results: 
+                person_info = create_person_info_from_results(person_name, results)
+                ids= [result['person']['value'].split('/')[-1] for result in results]
+                acceptable_ids = [i for i in ids if re.match(r'^Q\d+$', i)]
+                if acceptable_ids:
+                    id_counts = {i: ids.count(i) for i in acceptable_ids}
+                    most_common_id = max(id_counts, key=id_counts.get)
+                    if id_counts[ids[0]] == max(id_counts.values()):
+                        person_info['id'] = ids[0]
+                    else:
+                        person_info['id'] = most_common_id
+                else:
+                    if not silent:
+                        print(f"{person_name} has an invalid ID: {person_info['id']} (is not in the form Q12345..)")
+                    person_info['id'] = None
+                return person_info
+            break #Don't need to try again, we have the data
+        else: #Some status codes are handled,it's fine now
+            if not silent:
+                print(f"Error fetching data for {person_name}, status code: {response.status_code}.")
+            if response.status_code in [429, 500, 502, 503, 504]:
+                if not silent:
+                    print(f"Attempt {attempt + 1} of {retries}.")
+                
+                if attempt == 0:
+                    time.sleep(delay0)
+                elif attempt == 1:
+                    time.sleep(delay1)
+                elif attempt == 2:
+                    time.sleep(delay2)
+            else:
+                break
+
+    return None
+
+
+def get_all_person_info_improved(person_name, endpoint_url="https://query.wikidata.org/sparql", retries=3, delay0=1, delay1=20, delay2=60, silent = True):
+    #Basically, get_all_person_info but restricts to just human instances
+    #Would be for every language, but that also excludes artist alias cases
+    #and gets the ID of the person too, only if it starts with Q
+    query = '''
+    SELECT ?person ?personLabel ?placeOfBirthLabel ?dateOfBirth ?dateOfBirthLabel ?dateOfDeath ?dateOfDeathLabel ?placeOfDeathLabel ?workLocationLabel ?startTime ?endTime ?pointInTime ?genderLabel ?citizenshipLabel ?occupationLabel WHERE {
+      ?person ?label "%s"@en.
+      ?person wdt:P31 wd:Q5.
+      OPTIONAL {?person wdt:P19 ?placeOfBirth. }
+      OPTIONAL {?person wdt:P569 ?dateOfBirth. }
+      OPTIONAL {?person wdt:P570 ?dateOfDeath. }
+      OPTIONAL {?person wdt:P20 ?placeOfDeath. }
+      OPTIONAL { ?person wdt:P21 ?gender. }
+      OPTIONAL { ?person wdt:P27 ?citizenship. }
+      OPTIONAL { ?person wdt:P106 ?occupation. }
+      OPTIONAL {
+        ?person p:P937 ?workStmt.
+        ?workStmt ps:P937 ?workLocation.
+        OPTIONAL { ?workStmt pq:P580 ?startTime. }
+        OPTIONAL { ?workStmt pq:P582 ?endTime. }
+        OPTIONAL { ?workStmt pq:P585 ?pointInTime. }
+      }
+      SERVICE wikibase:label { bd:serviceParam wikibase:language "[AUTO_LANGUAGE],en". }
+    }
+    ''' % person_name.replace('"', '\"') #For the "%s"@en part, the person_name is put in there, but for quotation marks, they are escaped with a backslash (regex-like)
+
+    for attempt in range(retries):
+        response = requests.get(endpoint_url, params={'query': query, 'format': 'json'})
+        
+        if response.status_code == 200: #Successful
+            data = response.json()
+            results = data.get('results', {}).get('bindings', [])
+            if results:
+                ids = [result['person']['value'].split('/')[-1] for result in results]
+                acceptable_ids = [i for i in ids if re.match(r'^Q\d+$', i)]
+
+                if acceptable_ids:
+                    person_info = create_person_info_from_results(person_name, results)
+
+                    id_counts = {i: ids.count(i) for i in acceptable_ids}
+                    most_common_id = max(id_counts, key=id_counts.get)
+                    if id_counts[ids[0]] == max(id_counts.values()):
+                        person_info['id'] = ids[0]
+                    else:
+                        person_info['id'] = most_common_id
+                    return person_info
+                else:
+                    if not silent:
+                        print(f"{person_name} has no valid ID.")
+                    
+                    return None
+        
+            break #Don't need to try again, we have the data
+        else: #Some status codes are handled,it's fine now
+            if not silent:
+                print(f"Error fetching data for {person_name}, status code: {response.status_code}.")
+            if response.status_code in [429, 500, 502, 503, 504]:
+                if not silent:
+                    print(f"Attempt {attempt + 1} of {retries}.")
+                
+                if attempt == 0:
+                    time.sleep(delay0)
+                elif attempt == 1:
+                    time.sleep(delay1)
+                elif attempt == 2:
+                    time.sleep(delay2)
+            else:
+                break
+
+    return None
+
+
+def get_person_all_info_different_languages(person_name, endpoint_url="https://query.wikidata.org/sparql", retries=3, delay0=1, delay1=20, delay2=60, silent = True):
+    #Change in the query: language can be anything. Drawback: doesn't detect aliases
+    query = '''
+    SELECT ?person ?personLabel ?placeOfBirthLabel ?dateOfBirth ?dateOfBirthLabel ?dateOfDeath ?dateOfDeathLabel ?placeOfDeathLabel ?workLocationLabel ?startTime ?endTime ?pointInTime ?genderLabel ?citizenshipLabel ?occupationLabel WHERE {
+        ?person ?label "%s".
+        ?person wdt:P31 wd:Q5.
+        OPTIONAL {?person wdt:P19 ?placeOfBirth. }
+        OPTIONAL {?person wdt:P569 ?dateOfBirth. }
+        OPTIONAL {?person wdt:P570 ?dateOfDeath. }
+        OPTIONAL {?person wdt:P20 ?placeOfDeath. }
+        OPTIONAL { ?person wdt:P21 ?gender. }
+        OPTIONAL { ?person wdt:P27 ?citizenship. }
+        OPTIONAL { ?person wdt:P106 ?occupation. }
+        OPTIONAL {
+            ?person p:P937 ?workStmt.
+            ?workStmt ps:P937 ?workLocation.
+            OPTIONAL { ?workStmt pq:P580 ?startTime. }
+            OPTIONAL { ?workStmt pq:P582 ?endTime. }
+            OPTIONAL { ?workStmt pq:P585 ?pointInTime. }
+        }
+        SERVICE wikibase:label { bd:serviceParam wikibase:language "[AUTO_LANGUAGE],*". }
+    }
+    ''' % person_name.replace('"', '\"')
+
+    for attempt in range(retries):
+        response = requests.get(endpoint_url, params={'query': query, 'format': 'json'})
+        
+        if response.status_code == 200:
+            data = response.json()
+            results = data.get('results', {}).get('bindings', [])
+            if results:
+                ids = [result['person']['value'].split('/')[-1] for result in results]
+                acceptable_ids = [i for i in ids if re.match(r'^Q\d+$', i)]
+
+                if acceptable_ids:
+                    person_info = create_person_info_from_results(person_name, results)
+
+                    id_counts = {i: ids.count(i) for i in acceptable_ids}
+                    most_common_id = max(id_counts, key=id_counts.get)
+                    if id_counts[ids[0]] == max(id_counts.values()):
+                        person_info['id'] = ids[0]
+                    else:
+                        person_info['id'] = most_common_id
+                    return person_info
+                else:
+                    if not silent:
+                        print(f"{person_name} has no valid ID.")
+                    
+                    return None
+        
+            break #Don't need to try again, we have the data
+        else: #Some status codes are handled,it's fine now
+            if not silent:
+                print(f"Error fetching data for {person_name}, status code: {response.status_code}.")
+            if response.status_code in [429, 500, 502, 503, 504]:
+                if not silent:
+                    print(f"Attempt {attempt + 1} of {retries}.")
+                
+                if attempt == 0:
+                    time.sleep(delay0)
+                elif attempt == 1:
+                    time.sleep(delay1)
+                elif attempt == 2:
+                    time.sleep(delay2)
+            else:
+                break
+
+    return None
+
 
 def get_person_wikidata_name(person_name, retries = 3, delay = 1):
     query = '''
@@ -400,6 +609,7 @@ def get_multiple_people_all_info_separate_responses(people, retries=3, delay=60)
         SELECT ?person ?personLabel ?placeOfBirthLabel ?dateOfBirth ?dateOfDeath ?placeOfDeathLabel ?workLocationLabel ?startTime ?endTime ?pointInTime ?genderLabel ?citizenshipLabel ?occupationLabel WHERE {{
           VALUES ?personLabel {{ {people_string} }}
           ?person ?label ?personLabel.
+          ?person wdt:P31 wd:Q5.  #Ensure it's an instance of human, could happen that it's a statue of the person or something
           ?person wdt:P19 ?placeOfBirth.
           ?person wdt:P569 ?dateOfBirth.
           ?person wdt:P570 ?dateOfDeath.
