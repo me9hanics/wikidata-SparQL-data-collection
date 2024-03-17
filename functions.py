@@ -148,6 +148,65 @@ def create_person_info_from_results(person_name, person_results):
     return person_info
 
 
+def create_person_info_from_results_ID(id, person_results):
+    #More information
+    person_info = {
+        'name': person_results[0].get('personLabel', {}).get('value', None),
+        'id': id,
+        'birth_place': None,
+        'birth_date': None,
+        'death_date': None,
+        'death_place': None,
+        'gender': None,
+        'citizenship': None,
+        'occupation': [],
+        'work_locations': [],
+        'exhibited_at': [],
+        'influenced_by': [],
+    }
+
+    for result in person_results:
+        if not person_info['name']:
+            person_info['name'] = result.get('personLabel', {}).get('value', None)
+        if not person_info['birth_place']:
+            person_info['birth_place'] = result.get('placeOfBirthLabel', {}).get('value', None)
+        if not person_info['birth_date']:
+            person_info['birth_date'] = result.get('dateOfBirth', {}).get('value', None)
+        if not person_info['death_date']:
+            person_info['death_date'] = result.get('dateOfDeath', {}).get('value', None)
+        if not person_info['death_place']:
+            person_info['death_place'] = result.get('placeOfDeathLabel', {}).get('value', None)
+        if not person_info['gender']:
+            person_info['gender'] = result.get('genderLabel', {}).get('value', None)
+        if not person_info['citizenship']:
+            person_info['citizenship'] = result.get('citizenshipLabel', {}).get('value', None)
+
+        occupation = result.get('occupationLabel', {}).get('value', None)
+        if occupation and occupation not in person_info['occupation']:
+            person_info['occupation'].append(occupation)
+
+        work_location = result.get('workLocationLabel', {}).get('value', None)
+        if work_location:
+            location_info = {
+                'location': work_location,
+                'start_time': result.get('startTime', {}).get('value', None),
+                'end_time': result.get('endTime', {}).get('value', None),
+                'point_in_time': result.get('pointInTime', {}).get('value', None),
+            }
+            if location_info not in person_info['work_locations']:
+                person_info['work_locations'].append(location_info)
+
+        collection = result.get('collectionLabel', {}).get('value', None)
+        if collection and collection not in person_info['exhibited_at']:
+            person_info['exhibited_at'].append(collection)
+
+        influence = result.get('influenceLabel', {}).get('value', None)
+        if influence and influence not in person_info['influenced_by']:
+            person_info['influenced_by'].append(influence)
+    return person_info
+
+
+
 def get_all_person_info(person_name, endpoint_url="https://query.wikidata.org/sparql", retries=3, delay0=1, delay1=20, delay2=60):
 
     #SPARQL query
@@ -446,6 +505,191 @@ def get_person_all_info_different_languages(person_name, endpoint_url="https://q
     return None
 
 
+def get_person_wikidata_id(person_name, retries = 3, delay0 = 1, delay1=20, delay2=60):
+    query = '''
+    SELECT ?person ?personLabel WHERE{
+    ?person ?label "%s".
+    ?person wdt:P31 wd:Q5.  #Ensure it's an instance of human, could happen that it's a statue of the person or something
+    SERVICE wikibase:label { bd:serviceParam wikibase:language "[AUTO_LANGUAGE],*". }
+    }
+    '''% person_name.replace('"', '\"')
+
+    for attempt in range(retries):
+        response = requests.get("https://query.wikidata.org/sparql", params={'query': query, 'format': 'json'})
+        
+        if response.status_code == 200: #Successful
+            data = response.json()
+            results = data.get('results', {}).get('bindings', [])
+            if results:
+                for result in results:
+                    person = result.get('person', {}).get('value', None)
+                    label = result.get('personLabel', {}).get('value', None)
+                    if person and 'entity/Q' in person and label: #We get a ton of results, and almost all of them a gibberish, so we need to filter them
+                        wikidata_id = person.split('/')[-1] # Extract Wikidata ID from URL
+                        return wikidata_id
+        elif response.status_code in [408, 429, 500, 502, 503, 504]:
+            if attempt == 0:
+                time.sleep(delay0)
+            elif attempt == 1:
+                time.sleep(delay1)
+            elif attempt == 2:
+                time.sleep(delay2)
+        elif response.status_code in [400, 404]:
+            print("Error: %s"%response.status_code)
+            return None
+    return None
+
+
+def get_all_person_info_by_id(person_id, endpoint_url="https://query.wikidata.org/sparql", retries=3, delay0=1, delay1=20, delay2=60, silent = True):
+    #SPARQL query
+    query = '''
+
+    SELECT ?person ?personLabel ?placeOfBirthLabel ?dateOfBirth ?dateOfDeath ?placeOfDeathLabel ?genderLabel ?countryCitizenshipLabel ?occupationLabel ?workLocationLabel ?exhibitionLabel ?collectionLabel ?influenceLabel WHERE {
+      BIND(wd:%s AS ?person)
+      OPTIONAL { ?person wdt:P19 ?placeOfBirth. }
+      OPTIONAL { ?person wdt:P569 ?dateOfBirth. }
+      OPTIONAL { ?person wdt:P570 ?dateOfDeath. }
+      OPTIONAL { ?person wdt:P20 ?placeOfDeath. }
+      OPTIONAL { ?person wdt:P21 ?gender. }
+      OPTIONAL { ?person wdt:P27 ?countryCitizenship. }
+      OPTIONAL { ?person wdt:P106 ?occupation. }
+      OPTIONAL {
+        ?person p:P937 ?workStmt.
+        ?workStmt ps:P937 ?workLocation.
+        OPTIONAL { ?workStmt pq:P580 ?startTime. }
+        OPTIONAL { ?workStmt pq:P582 ?endTime. }
+        OPTIONAL { ?workStmt pq:P585 ?pointInTime. }
+      }
+      #OPTIONAL { ?person wdt:P6379 ?collection. } #We comment this out now. For some artists (e.g. Rubens), it's too slow
+      OPTIONAL { ?person wdt:P737 ?influence. }
+      SERVICE wikibase:label { bd:serviceParam wikibase:language "[AUTO_LANGUAGE],en". ?person rdfs:label ?personLabel. ?placeOfBirth rdfs:label ?placeOfBirthLabel. ?placeOfDeath rdfs:label ?placeOfDeathLabel. ?gender rdfs:label ?genderLabel. ?countryCitizenship rdfs:label ?countryCitizenshipLabel. ?occupation rdfs:label ?occupationLabel. ?workLocation rdfs:label ?workLocationLabel. ?collection rdfs:label ?collectionLabel. ?influence rdfs:label ?influenceLabel. }
+    }
+    
+    '''% person_id
+
+    for attempt in range(retries):
+        response = requests.get(endpoint_url, params={'query': query, 'format': 'json'})
+        
+        if response.status_code == 200: #Successful
+            data = response.json()
+            results = data.get('results', {}).get('bindings', [])
+            print('Results 0:', results[0])
+            if results:
+                person_info = create_person_info_from_results_ID(person_id, results)
+                return person_info
+            break #Don't need to try again, we have the data
+        else: #Some status codes are handled,it's fine now
+            if not silent:
+                print(f"Error fetching data for {person_id}, status code: {response.status_code}.")
+            if response.status_code in [429, 500, 502, 503, 504]:
+                if not silent:
+                    print(f"Attempt {attempt + 1} of {retries}.")
+                if attempt == 0:
+                    time.sleep(delay0)
+                elif attempt == 1:
+                    time.sleep(delay1)
+                elif attempt == 2:
+                    time.sleep(delay2)
+            else:
+                break
+
+    return None
+
+
+def get_all_person_info_by_id_with_exhibitions(person_id, endpoint_url="https://query.wikidata.org/sparql", retries=3, delay0=1, delay1=20, delay2=60, silent = True):
+    #This may be too slow for some artists, e.g. Rubens, therefore we get an error (query 1 minute timeout)
+    query = '''
+
+    SELECT ?person ?personLabel ?placeOfBirthLabel ?dateOfBirth ?dateOfDeath ?placeOfDeathLabel ?genderLabel ?countryCitizenshipLabel ?occupationLabel ?workLocationLabel ?exhibitionLabel ?collectionLabel ?influenceLabel WHERE {
+      BIND(wd:%s AS ?person)
+      OPTIONAL { ?person wdt:P19 ?placeOfBirth. }
+      OPTIONAL { ?person wdt:P569 ?dateOfBirth. }
+      OPTIONAL { ?person wdt:P570 ?dateOfDeath. }
+      OPTIONAL { ?person wdt:P20 ?placeOfDeath. }
+      OPTIONAL { ?person wdt:P21 ?gender. }
+      OPTIONAL { ?person wdt:P27 ?countryCitizenship. }
+      OPTIONAL { ?person wdt:P106 ?occupation. }
+      OPTIONAL {
+        ?person p:P937 ?workStmt.
+        ?workStmt ps:P937 ?workLocation.
+        OPTIONAL { ?workStmt pq:P580 ?startTime. }
+        OPTIONAL { ?workStmt pq:P582 ?endTime. }
+        OPTIONAL { ?workStmt pq:P585 ?pointInTime. }
+      }
+      OPTIONAL { ?person wdt:P6379 ?collection. }
+      OPTIONAL { ?person wdt:P737 ?influence. }
+      SERVICE wikibase:label { bd:serviceParam wikibase:language "[AUTO_LANGUAGE],en". ?person rdfs:label ?personLabel. ?placeOfBirth rdfs:label ?placeOfBirthLabel. ?placeOfDeath rdfs:label ?placeOfDeathLabel. ?gender rdfs:label ?genderLabel. ?countryCitizenship rdfs:label ?countryCitizenshipLabel. ?occupation rdfs:label ?occupationLabel. ?workLocation rdfs:label ?workLocationLabel. ?collection rdfs:label ?collectionLabel. ?influence rdfs:label ?influenceLabel. }
+    }
+    
+    '''% person_id
+
+    for attempt in range(retries):
+        response = requests.get(endpoint_url, params={'query': query, 'format': 'json'})
+        
+        if response.status_code == 200: #Successful
+            data = response.json()
+            results = data.get('results', {}).get('bindings', [])
+            print('Results 0:', results[0])
+            if results:
+                person_info = create_person_info_from_results_ID(person_id, results)
+                return person_info
+            break #Don't need to try again, we have the data
+        else: #Some status codes are handled,it's fine now
+            if not silent:
+                print(f"Error fetching data for {person_id}, status code: {response.status_code}.")
+            if response.status_code in [429, 500, 502, 503, 504]:
+                if not silent:
+                    print(f"Attempt {attempt + 1} of {retries}.")
+                if attempt == 0:
+                    time.sleep(delay0)
+                elif attempt == 1:
+                    time.sleep(delay1)
+                elif attempt == 2:
+                    time.sleep(delay2)
+            else:
+                break
+
+    return None
+
+
+def get_exhibitions_by_id(person_id, endpoint_url="https://query.wikidata.org/sparql", retries=3, delay0=1, delay1=20, delay2=60, silent = True):
+    query = '''
+    SELECT ?person ?personLabel ?collectionLabel WHERE {
+      BIND(wd:%s AS ?person)
+      OPTIONAL { ?person wdt:P6379 ?collection. }
+      SERVICE wikibase:label { bd:serviceParam wikibase:language "[AUTO_LANGUAGE],en". ?person rdfs:label ?personLabel. ?collection rdfs:label ?collectionLabel. }
+    }
+    ''' % person_id
+
+    for attempt in range(retries):
+        response = requests.get(endpoint_url, params={'query': query, 'format': 'json'})
+        
+        if response.status_code == 200: #Successful
+            data = response.json()
+            results = data.get('results', {}).get('bindings', [])
+            print('Results 0:', results[0])
+            if results:
+                collections = [result.get('collectionLabel', {}).get('value', None) for result in results if 'collectionLabel' in result]
+                return collections
+            break #Don't need to try again, we have the data
+        else: #Some status codes are handled,it's fine now
+            if not silent:
+                print(f"Error fetching data for {person_id}, status code: {response.status_code}.")
+            if response.status_code in [429, 500, 502, 503, 504]:
+                if not silent:
+                    print(f"Attempt {attempt + 1} of {retries}.")
+                if attempt == 0:
+                    time.sleep(delay0)
+                elif attempt == 1:
+                    time.sleep(delay1)
+                elif attempt == 2:
+                    time.sleep(delay2)
+            else:
+                break
+
+    return None
+
+
 def get_person_wikidata_name(person_name, retries = 3, delay = 1):
     query = '''
     SELECT ?person ?personLabel WHERE{
@@ -517,86 +761,6 @@ def get_person_aliases(person_name):
     #TODO
     #both aliases - and different language names
     pass
-
-
-def get_person_wikidata_id(person_name, retries = 3, delay0 = 1, delay1=20, delay2=60):
-    query = '''
-    SELECT ?person ?personLabel WHERE{
-    ?person ?label "%s".
-    ?person wdt:P31 wd:Q5.  #Ensure it's an instance of human, could happen that it's a statue of the person or something
-    SERVICE wikibase:label { bd:serviceParam wikibase:language "[AUTO_LANGUAGE],*". }
-    }
-    '''% person_name.replace('"', '\"')
-
-    for attempt in range(retries):
-        response = requests.get("https://query.wikidata.org/sparql", params={'query': query, 'format': 'json'})
-        
-        if response.status_code == 200: #Successful
-            data = response.json()
-            results = data.get('results', {}).get('bindings', [])
-            if results:
-                for result in results:
-                    person = result.get('person', {}).get('value', None)
-                    label = result.get('personLabel', {}).get('value', None)
-                    if person and 'entity/Q' in person and label: #We get a ton of results, and almost all of them a gibberish, so we need to filter them
-                        wikidata_id = person.split('/')[-1] # Extract Wikidata ID from URL
-                        return wikidata_id
-        elif response.status_code in [408, 429, 500, 502, 503, 504]:
-            if attempt == 0:
-                time.sleep(delay0)
-            elif attempt == 1:
-                time.sleep(delay1)
-            elif attempt == 2:
-                time.sleep(delay2)
-        elif response.status_code in [400, 404]:
-            print("Error: %s"%response.status_code)
-            return None
-    return None
-
-
-def get_all_person_info_by_id(person_id, endpoint_url="https://query.wikidata.org/sparql", retries=3, delay=1):
-    #SPARQL query
-    query = '''
-    SELECT ?person ?personLabel ?placeOfBirthLabel ?dateOfBirth ?dateOfDeath ?placeOfDeathLabel ?workLocationLabel ?startTime ?endTime ?pointInTime ?genderLabel ?citizenshipLabel ?occupationLabel WHERE {
-      BIND(wd:%s AS ?person).
-      OPTIONAL {?person wdt:P19 ?placeOfBirth. }
-      OPTIONAL {?person wdt:P569 ?dateOfBirth. }
-      OPTIONAL {?person wdt:P570 ?dateOfDeath. }
-      OPTIONAL {?person wdt:P20 ?placeOfDeath. }
-      OPTIONAL { ?person wdt:P21 ?gender. }
-      OPTIONAL { ?person wdt:P27 ?citizenship. }
-      OPTIONAL { ?person wdt:P106 ?occupation. }
-      OPTIONAL {
-        ?person p:P937 ?workStmt.
-        ?workStmt ps:P937 ?workLocation.
-        OPTIONAL { ?workStmt pq:P580 ?startTime. }
-        OPTIONAL { ?workStmt pq:P582 ?endTime. }
-        OPTIONAL { ?workStmt pq:P585 ?pointInTime. }
-      }
-      SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
-    }
-    ''' % person_id
-
-    for attempt in range(retries):
-        response = requests.get(endpoint_url, params={'query': query, 'format': 'json'})
-        
-        if response.status_code == 200: #Successful
-            data = response.json()
-            results = data.get('results', {}).get('bindings', [])
-            if results:
-                person_name = results[0].get('personLabel', {}).get('value', None)
-                person_info = create_person_info_from_results(person_name, results)
-                return person_info
-            break #Don't need to try again, we have the data
-        else: #Some status codes are handled,it's fine now
-            print(f"Error fetching data for {person_id}, status code: {response.status_code}.")
-            if response.status_code in [429, 500, 502, 503, 504]:
-                print(f"Attempt {attempt + 1} of {retries}.")
-                time.sleep(delay)
-            else:
-                break
-
-    return None
 
 
 def get_multiple_people_all_info_separate_responses(people, retries=3, delay=60):
