@@ -847,6 +847,59 @@ def get_multiple_people_all_info_fast_retry_missing(people, retries=3, delay=60)
 
     return gathered_people_fast + gathered_people_slow
 
+
+def get_multiple_people_all_info_by_id(people_ids, retries=3, delay=60):
+    # First, reduce the number of people in one query
+    chunks = [people_ids[i:i + 150] for i in range(0, len(people_ids), 150)]
+    all_people_info = []
+    for chunk in chunks:
+        people_id_string = ' '.join(f'wd:{id}' for id in chunk)
+        query = f'''
+        SELECT ?person ?personLabel ?name ?placeOfBirthLabel ?dateOfBirth ?dateOfDeath ?placeOfDeathLabel ?workLocationLabel ?startTime ?endTime ?pointInTime ?genderLabel ?citizenshipLabel ?occupationLabel WHERE {{
+          VALUES ?person {{ {people_id_string} }}
+          ?person wdt:P31 wd:Q5.  #Ensure it's an instance of human, could happen that it's a statue of the person or something
+          ?person wdt:P19 ?placeOfBirth.
+          ?person wdt:P569 ?dateOfBirth.
+          ?person wdt:P570 ?dateOfDeath.
+          ?person wdt:P20 ?placeOfDeath.
+          OPTIONAL {{ ?person wdt:P21 ?gender. }}
+          OPTIONAL {{ ?person wdt:P27 ?citizenship. }}
+          OPTIONAL {{ ?person wdt:P106 ?occupation. }}
+          OPTIONAL {{
+            ?person p:P937 ?workStmt.
+            ?workStmt ps:P937 ?workLocation.
+            OPTIONAL {{ ?workStmt pq:P580 ?startTime. }}
+            OPTIONAL {{ ?workStmt pq:P582 ?endTime. }}
+            OPTIONAL {{ ?workStmt pq:P585 ?pointInTime. }}
+          }}
+          OPTIONAL {{ ?person rdfs:label ?name. FILTER(LANG(?name) = "en") }}
+          SERVICE wikibase:label {{ bd:serviceParam wikibase:language "en". }}
+        }}
+        '''
+        response_json = sparql_query(query, retries, delay)
+        results = response_json.get('results', {}).get('bindings', [])
+        for person_id in chunk:
+            person_results = [r for r in results if r.get('person', {}).get('value').split('/')[-1] == person_id]
+            if person_results:
+                person_info = create_person_info_from_results_ID(person_id, person_results)
+                all_people_info.append(person_info)
+    return all_people_info
+
+
+def get_multiple_people_all_info_by_id_fast_retry_missing(people_ids, retries=3, delay=60):
+    gathered_people_fastly = get_multiple_people_all_info_by_id(people_ids, retries, delay)
+    collected_ids = [gathered_people_fastly[k]['id'] for k in range(len(gathered_people_fastly))]
+    missing_people_ids = [id for id in people_ids if id not in collected_ids]
+
+    gathered_people_slowly = []
+    for person_id in missing_people_ids:
+        person_info = get_all_person_info_by_id(person_id)
+        if person_info:
+            gathered_people_slowly.append(person_info)
+
+    return gathered_people_fastly + gathered_people_slowly
+
+
 def get_person_info_retry_after(person_name, placeofbirth_return = True, dateofbirth_return = True, dateofdeath_return = True, placeofdeath_return = True, worklocation_return=True, gender_return=True, citizenship_return=True, occupation_return=True, endpoint_url="https://query.wikidata.org/sparql", retries=3):
     query = get_query_from_input(person_name, placeofbirth_return, dateofbirth_return, dateofdeath_return, placeofdeath_return, worklocation_return, gender_return, citizenship_return, occupation_return)
     for attempt in range(retries):
