@@ -628,7 +628,8 @@ def get_all_person_info_by_id_with_exhibitions(person_id, endpoint_url="https://
         if response.status_code == 200: #Successful
             data = response.json()
             results = data.get('results', {}).get('bindings', [])
-            print('Results 0:', results[0])
+            if not silent:
+                print('Results 0:', results[0])
             if results:
                 person_info = create_person_info_from_results_ID(person_id, results)
                 return person_info
