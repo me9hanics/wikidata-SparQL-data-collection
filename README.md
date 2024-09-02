@@ -1,13 +1,19 @@
 # SparQL Wikidata data collection from Wikipedia profiles 
-A file with functions to help fetch various data of personalities (and other entities) from Wikidata, and a notebook showing how to use them.
+A file with functions to help fetch various data of personalities (and other entities) from Wikidata, and a notebook showing how to use them.<br>
 
-## Usage
+This repository was used to collect data of over 10000 painters for the projects [PainterPalette dataset](https://github.com/me9hanics/PainterPalette) and [ArtProject](https://github.com/me9hanics/ArtProject). (In contrast, WikiArt only contains painting data of 3000 painters.)
 
-The functions are in the ```functions.py``` file, which you can easily import after downloading 
+## How to use?
 
-### Get the information of someone, e.g. van Gogh from Wikidata
+- Just download the ```functions.py``` file.
+  
+- To run examples, you can download the `examples.ipynb` Jupyter Notebook too.
+ 
+All functions are stored in the ```functions.py``` file, which after downloading you can easily import in any Python/Jupyter Notebook file in the same folder, with `import functions`.
 
-Using the ```get_all_person_info``` function (other options are *get_person_info* and *get_person_locations* which include less information)
+### Gather data of someone (van Gogh) from Wikidata
+
+Use the ```get_all_person_info``` function (other options are *get_person_info* and *get_person_locations*, these include less information).
 
 
 ```python
@@ -17,7 +23,7 @@ van_gogh_response = f.get_all_person_info("Van Gogh")
 van_gogh_response
 ```
 
-The returned response:
+The returned response, in dictionary (JSON) format:
 
 ```
     {'name': 'Van Gogh',
@@ -51,10 +57,12 @@ Print some information from the dictionary:
 
 ```python
 print(f"Birthplace: {van_gogh_response['birth_place']}, deathplace: {van_gogh_response['death_place']}")
+
 print(f"Birthyear: {f.find_year(van_gogh_response['birth_date'])}, deathdate: {f.find_year(van_gogh_response['death_date'])}")
+
 print(f"Gender: {van_gogh_response['gender']}, citizenship: {van_gogh_response['citizenship']}, occupations: {str(van_gogh_response['occupation']).strip('[]')}")
-print()
-print("Work locations:")
+
+print("\nWork locations:")
 print(f.get_places_from_response(van_gogh_response))
 ```
 
@@ -66,7 +74,7 @@ print(f.get_places_from_response(van_gogh_response))
     ['Saint-Rémy-de-Provence', 'The Hague', 'Ramsgate', 'City of Brussels', 'Etten-Leur', 'Dordrecht', 'Nuenen', 'Paris', 'Auvers-sur-Oise', 'Van Gogh House', 'Emmen', 'London', 'Amsterdam', 'Arles', 'Hoogeveen', 'Antwerp', 'Borinage', 'Tilburg', 'Maison Van Gogh']
     
 
-For a nicer display, we can print each part manually, with residence period too:
+For a nicer display of location, we can print each part manually; moreover with the residing period too:
 
 
 ```python
@@ -97,7 +105,7 @@ for place in places_list:
     Maison Van Gogh, between 1879-1880
     
 
-We could get all this information by using a SparQL query, simplifying the process. Let's see how an example of a SparQL query:
+<br>We could also get all this information by writing our SparQL query. Let's see an example of a SparQL query, which we can run with the `sparql_query` function:
   
   ```sparql
     person_name = "Vincent van Gogh"
@@ -141,7 +149,7 @@ The ```?person wdt:P19 ?placeOfBirth.``` line and others tell which Wikidata ite
 This query is to find painters. The conditions are: those profiles, which have instance of property (P31) "human" (Q5) and occupation (P106) painter (Q1028181). 
 
 
-### A more complex example
+### More complex example
 Let's try on something bigger, using artists from the [PainterPalette](https://github.com/me9hanics/PainterPalette) dataset:
 
 
@@ -247,4 +255,7 @@ examples.drop(columns=["pictures_count","styles"])
     <img src=https://github.com/me9hanics/sparql-wikidata-data-collection/assets/82604073/e621d955-210a-493d-a506-e1b9211f5d03 width=800 >
 </div>
 
+## Notes
 
+The code is quite messy, and uncommented indeed. Most of the explanations behind redundant, repetitive code is that the queries don't always get all the data of an entity, hence workarounds need to be done. I only managed to find stable workarounds after many-many tries, so the code would need to be refactored already.<br>
+So this code is not production ready, but enough to collect extensive data once a while.
