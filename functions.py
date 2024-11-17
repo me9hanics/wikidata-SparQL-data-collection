@@ -10,7 +10,7 @@ Common inputs:
     people (list of str): List of people's names.
     person_id (str): Wikidata ID of the person.
     retries (int): Maximum number of retries, in case of a status code error.
-    delay0, delay1, delay2 (int): Delay times for retries.
+    delay, delay0, delay1, delay2 (int): Delay times for retries.
     endpoint_url (str): the URL of the (SPARQL) endpoint, should be "https://query.wikidata.org/sparql".
     silent (bool): Whether to print out errors or not.
 
@@ -21,6 +21,21 @@ Common inputs:
 ####################################### Basic functions #######################################
 
 def sparql_query(query,  retries=3, delay=10):
+    """
+    Make a SPARQL query API call to the Wikidata endpoint.
+
+    Parameters:
+    - query (str): The SPARQL query, provided as string. It will be used as the 'query' parameter in the URL.
+        An example: query = ''' SELECT ?painter ?painterLabel WHERE {
+                                    ?painter wdt:P31 wd:Q5;          
+                                    wdt:P106 wd:Q1028181.   
+                                    SERVICE wikibase:label { bd:serviceParam wikibase:language "[AUTO_LANGUAGE],en". }
+                                }'''
+    - retries, delay: See at the top of the file.
+
+    Returns:
+    - dict or None: The JSON response of the query if successful, None otherwise.
+    """
     endpoint_url="https://query.wikidata.org/sparql"
     for attempt in range(retries):
         try:
@@ -45,6 +60,17 @@ def sparql_query(query,  retries=3, delay=10):
 
 
 def sparql_query_by_dict(variable_names, WHERE_dict, endpoint_url="https://query.wikidata.org/sparql", retries=3, delay=10):
+    """
+    Make a SPARQL query using a dictionary to construct the WHERE clause.
+
+    Parameters:
+    - variable_names (list of str): List of variable names to select.
+    - WHERE_dict (dict): Dictionary where keys are variable names and values are conditions.
+    - endpoint_url, retries, delay: See at the top of the file.
+
+    Returns:
+    - dict or None: The JSON response of the query if successful, None otherwise.
+    """
     #Example dict: {'painter': "wdt:P31 wd:Q5;", ... }
     select = "SELECT " + " ".join([f"?{name}" for name in variable_names])
     where = " WHERE {\n"
@@ -57,6 +83,16 @@ def sparql_query_by_dict(variable_names, WHERE_dict, endpoint_url="https://query
 
 
 def sparql_query_retry_after(query,  retries=3):
+    """
+    Make a SPARQL query API call to the Wikidata endpoint with retry-after handling.
+
+    Parameters:
+    - query (str): The SPARQL query, provided as string.
+    - retries: See at the top of the file.
+
+    Returns:
+    - dict or None: The JSON response of the query if successful, None otherwise.
+    """
     endpoint_url="https://query.wikidata.org/sparql"
     for attempt in range(retries):
         response = requests.get(endpoint_url, params={'query': query, 'format': 'json'})
@@ -80,6 +116,16 @@ def sparql_query_retry_after(query,  retries=3):
 
 
 def get_query_from_input(person, placeofbirth = True, dateofbirth = True, dateofdeath = True, placeofdeath = True, worklocation=True, gender=True, citizenship=True, occupation=True):
+    """
+    Construct a SPARQL query based on the given parameters.
+
+    Parameters:
+    - person (str): The name of the person.
+    - placeofbirth, dateofbirth, dateofdeath, placeofdeath, worklocation, gender, citizenship, occupation: See at the top of the file.
+
+    Returns:
+    - str: The constructed SPARQL query.
+    """
     query = "SELECT ?person ?personLabel"
     if placeofbirth:
         query += " ?placeOfBirthLabel"
@@ -121,6 +167,16 @@ def get_query_from_input(person, placeofbirth = True, dateofbirth = True, dateof
 
 
 def create_person_info_from_results(person_name, person_results):
+    """
+    Create a dictionary with person information from SPARQL query results.
+
+    Parameters:
+    - person_name (str): The name of the person.
+    - person_results (list of dict): The results from the SPARQL query.
+
+    Returns:
+    - dict: A dictionary containing the person's information.
+    """
     person_info = {
         'name': person_name,
         'birth_place': None,
@@ -164,6 +220,16 @@ def create_person_info_from_results(person_name, person_results):
 
 
 def create_person_info_from_results_with_id(person_id, person_results):
+    """
+    Create a dictionary with person information from SPARQL query results, including the person's ID.
+
+    Parameters:
+    - person_id (str): The Wikidata ID of the person.
+    - person_results (list of dict): The results from the SPARQL query.
+
+    Returns:
+    - dict: A dictionary containing the person's information.
+    """
     #More information
     person_info = {
         'name': person_results[0].get('personLabel', {}).get('value', None),
@@ -222,6 +288,16 @@ def create_person_info_from_results_with_id(person_id, person_results):
 
 
 def get_places_from_response(response, silent=True):
+    """
+    Extract work locations from the response.
+
+    Parameters:
+    - response (dict): The response dictionary containing person information.
+    - silent (bool): Whether to print out errors or not.
+
+    Returns:
+    - str: A string representation of the list of places.
+    """
     places = []
     try:
         for place in response["work_locations"]:
@@ -236,6 +312,15 @@ def get_places_from_response(response, silent=True):
 
 
 def find_year(string):
+    """
+    Extract the year from a string.
+
+    Parameters:
+    - string (str): The string containing the year.
+
+    Returns:
+    - int or None: The extracted year or None if not found.
+    """
     year = None
     if string is not None:
         year = re.findall(r"\d+(?=-)", string) #Until the first dash, match
@@ -244,6 +329,16 @@ def find_year(string):
 
 
 def get_years_from_response_location(response_location, silent=True):
+    """
+    Extract years from a response location.
+
+    Parameters:
+    - response_location (dict): The response location dictionary.
+    - silent (bool): Whether to print out errors or not.
+
+    Returns:
+    - list: A list of extracted years.
+    """
     years = []
     for key in ["start_time", "end_time", "point_in_time"]:
         try:
@@ -257,6 +352,15 @@ def get_years_from_response_location(response_location, silent=True):
 
 
 def stringlist_to_list(stringlist):
+    """
+    Convert a string representation of a list to an actual list.
+
+    Parameters:
+    - stringlist (str): The string representation of a list.
+
+    Returns:
+    - list: The converted list.
+    """
     import ast #library not used for other cases, not worth importing generally
     return ast.literal_eval(stringlist) #but this functionality is already included in it
 
@@ -359,6 +463,16 @@ def get_multiple_people_all_info(people, retries=3, delay=60):
 
 
 def get_multiple_people_all_info_fast_retry_missing(people, retries=3, delay=60):
+    """
+    Quickly query multiple people at once, then retry for missing instances separately.
+    Basically, running 'get_multiple_people_all_info' first and 'get_all_person_info' for each missing instance.
+
+    Parameters:
+    - people, retries, delay: See at the top of the file.
+
+    Returns:
+    - list: List of dictionaries for each person.
+    """
     gathered_people_fast = get_multiple_people_all_info(people, retries, delay)
     collected_names = [gathered_people_fast[k]['name'] for k in range(len(gathered_people_fast))]
     missing_people = [p for p in people if p not in collected_names]
@@ -373,6 +487,16 @@ def get_multiple_people_all_info_fast_retry_missing(people, retries=3, delay=60)
 
 
 def get_multiple_people_all_info_by_id(people_ids, retries=3, delay=60):
+    """
+    Get all information about multiple people from Wikidata by their IDs.
+
+    Parameters:
+    - people_ids (list of str): List of Wikidata IDs of the people.
+    - retries, delay: See at the top of the file.
+
+    Returns:
+    - list: List of dictionaries for each person.
+    """
     # First, reduce the number of people in one query
     chunks = [people_ids[i:i + 150] for i in range(0, len(people_ids), 150)]
     all_people_info = []
@@ -411,6 +535,16 @@ def get_multiple_people_all_info_by_id(people_ids, retries=3, delay=60):
 
 
 def get_multiple_people_all_info_by_id_fast_retry_missing(people_ids, retries=3, delay=60):
+    """
+    Get all information about multiple people from Wikidata by their IDs, with retry for missing instances.
+
+    Parameters:
+    - people_ids (list of str): List of Wikidata IDs of the people.
+    - retries, delay: See at the top of the file.
+
+    Returns:
+    - list: List of dictionaries for each person.
+    """
     gathered_people_fastly = get_multiple_people_all_info_by_id(people_ids, retries, delay)
     collected_ids = [gathered_people_fastly[k]['id'] for k in range(len(gathered_people_fastly))]
     missing_people_ids = [id for id in people_ids if id not in collected_ids]
@@ -428,6 +562,16 @@ def get_multiple_people_all_info_by_id_fast_retry_missing(people_ids, retries=3,
 #(SPARQL query)
 
 def get_all_person_info(person_name, endpoint_url="https://query.wikidata.org/sparql", retries=3, delay0=1, delay1=20, delay2=60):
+    """
+    Default function to get all sorts of information about a person from Wikidata.
+    This includes the person's name, birth place, birth date, death date, gender, citizenship, occupation, work locations (with time data).
+
+    Parameters:
+    - person_name, endpoint_url, retries, delay0, delay1, delay2: See at the top of the file.
+
+    Returns:
+    - dict or None: Data dictionary about the person if successful, None otherwise.
+    """
     query = '''
     SELECT ?person ?personLabel ?placeOfBirthLabel ?dateOfBirth ?dateOfDeath ?placeOfDeathLabel ?workLocationLabel ?startTime ?endTime ?pointInTime ?genderLabel ?citizenshipLabel ?occupationLabel WHERE {
       ?person ?label "%s"@en.
@@ -517,20 +661,12 @@ def get_all_person_info(person_name, endpoint_url="https://query.wikidata.org/sp
 def get_all_person_info_improved(person_name, endpoint_url="https://query.wikidata.org/sparql", retries=3, delay0=1, delay1=20, delay2=60, silent = True):
     """
     An improved version of get_all_person_info.
-
     Basically, same as get_all_person_info but restricts to just human instances
-    and gets the ID of the person too, only if it starts with Q.
-
+        and gets the ID of the person too, only if it starts with Q.
     Would be for every language, but that also excludes person alias cases.
 
     Parameters:
-    person_name: str
-    endpoint_url: str
-    retries: int
-    delay0: int
-    delay1: int
-    delay2: int
-    silent: bool
+    - person_name, endpoint_url, retries, delay0, delay1, delay2, silent: See at the top of the file.
 
     Returns:
     - dict or None: Data dictionary about the person if successful, None otherwise.
@@ -611,13 +747,7 @@ def get_person_all_info_different_languages(person_name, endpoint_url="https://q
     The drawback is that that person_name string must match the name in the database, so aliases are not detected.
     
     Parameters:
-    person_name: str
-    endpoint_url: str
-    retries: int
-    delay0: int
-    delay1: int
-    delay2: int
-    silent: bool
+    - person_name, endpoint_url, retries, delay0, delay1, delay2, silent: See at the top of the file.
     
     Returns:
     - dict or None: Data dictionary about the person if successful, None otherwise
@@ -768,7 +898,7 @@ def get_person_info_retry_after(person_name, placeofbirth_return = True, dateofb
 
 def get_person_info(person_name, endpoint_url="https://query.wikidata.org/sparql", retries=3, delay=1):
     """
-    Not recommended, using get_all_person_info_improved or get_person_info_retry_after is more effective.
+    NOTE: Not recommended, using get_all_person_info_improved or get_person_info_retry_after is more effective.
 
     Get all information about a person from Wikidata.
 
@@ -927,6 +1057,10 @@ def get_person_wikidata_name_fast(person_name, retries = 3, delay0 = 1,delay1=20
 
 
 def get_person_aliases(person_name):
+    """
+    TODO
+    Get aliases and different language names for a person.
+    """
     #TODO
     #both aliases - and different language names
     pass
@@ -935,7 +1069,15 @@ def get_person_aliases(person_name):
 ######## Location querying ########
 #Exhibitions: See below, at Wikidata ID queries
 def get_person_locations(person_name, endpoint_url="https://query.wikidata.org/sparql", retries=3, delay=1):
-    #SPARQL query
+    """
+    Get all work locations of a person from Wikidata.
+    
+    Parameters:
+    - person_name, endpoint_url, retries, delay: See at the top of the file.
+    
+    Returns:
+    - dict or None: Data dictionary about the person if successful, None otherwise.
+    """
     query = '''
     SELECT ?person ?personLabel ?placeOfBirthLabel ?placeOfDeathLabel ?workLocationLabel ?startTime ?endTime ?pointInTime WHERE {
       ?person ?label "%s"@en.
@@ -992,6 +1134,15 @@ def get_person_locations(person_name, endpoint_url="https://query.wikidata.org/s
 
 
 def get_places_with_years_from_response(response):
+    """
+    Extract places with temporal data (years) from the response.
+
+    Parameters:
+    - response (dict): The response dictionary, containing person information.
+
+    Returns:
+    - str: String representation of the places with years
+    """
     places = []
     for place in response["work_locations"]:
         years = get_years_from_response_location(place)
@@ -1055,6 +1206,15 @@ def get_person_wikidata_id(person_name, retries = 3, delay0 = 1, delay1=20, dela
 
 
 def get_all_person_info_and_id(person_name, endpoint_url="https://query.wikidata.org/sparql", retries=3, delay0=1, delay1=20, delay2=60, silent = True):
+    """
+    Get all information about a person from Wikidata, and including their ID.
+
+    Parameters:
+    - person_name, endpoint_url, retries, delay0, delay1, delay2, silent: See at the top of the file.
+
+    Returns:
+    - dict or None: Data dictionary about the person if successful, None otherwise.
+    """
     query = '''
     SELECT ?person ?personLabel ?placeOfBirthLabel ?dateOfBirth ?dateOfDeath ?placeOfDeathLabel ?workLocationLabel ?startTime ?endTime ?pointInTime ?genderLabel ?citizenshipLabel ?occupationLabel WHERE {
       ?person ?label "%s"@en.
@@ -1120,7 +1280,16 @@ def get_all_person_info_and_id(person_name, endpoint_url="https://query.wikidata
 
 
 def get_all_person_info_by_id(person_id, endpoint_url="https://query.wikidata.org/sparql", retries=3, delay0=1, delay1=20, delay2=60, silent = True):
+    """
+    NOTE: Exhibitions are excluded currently, as they are too slow for some artists (e.g. Rubens).
+    Get all information about a person from Wikidata, using their Wikidata ID.
     
+    Parameters:
+    - person_id, endpoint_url, retries, delay0, delay1, delay2, silent: See at the top of the file.
+    
+    Returns:
+    - dict or None: Data dictionary about the person if successful, None otherwise.
+    """
     query = '''
 
     SELECT ?person ?personLabel ?placeOfBirthLabel ?dateOfBirth ?dateOfDeath ?placeOfDeathLabel ?genderLabel ?countryCitizenshipLabel ?occupationLabel ?workLocationLabel ?exhibitionLabel ?collectionLabel ?influenceLabel WHERE {
@@ -1175,6 +1344,15 @@ def get_all_person_info_by_id(person_id, endpoint_url="https://query.wikidata.or
 
 
 def get_exhibitions_by_id(person_id, endpoint_url="https://query.wikidata.org/sparql", retries=3, delay0=1, delay1=20, delay2=60, silent = True):
+    """
+    Get exhibitions of a person from Wikidata, using their Wikidata ID.
+
+    Parameters:
+    - person_id, endpoint_url, retries, delay0, delay1, delay2, silent: See at the top of the file.
+
+    Returns:
+    - list or None: List of exhibitions of the person if successful, None otherwise.
+    """
     query = '''
     SELECT ?person ?personLabel ?collectionLabel WHERE {
       BIND(wd:%s AS ?person)
@@ -1214,6 +1392,18 @@ def get_exhibitions_by_id(person_id, endpoint_url="https://query.wikidata.org/sp
 
 def get_all_person_info_and_exhibitions_by_id(person_id, endpoint_url="https://query.wikidata.org/sparql", retries=3, delay0=1, delay1=20, delay2=60, silent = True):
     #This may be too slow for some artists, e.g. Rubens, therefore we get an error (query 1 minute timeout)
+    """
+    NOTE: This may be too slow for some artists, e.g. Rubens, for whom we can get a timeout error.
+    Consider using get_all_person_info_by_id and get_exhibitions_by_id successively.
+
+    Get all information about a person from Wikidata, using their Wikidata ID, including exhibitions.
+
+    Parameters:
+    - person_id, endpoint_url, retries, delay0, delay1, delay2, silent: See at the top of the file.
+
+    Returns:
+    - dict or None: Data dictionary about the person if successful, None otherwise.
+    """
     query = '''
 
     SELECT ?person ?personLabel ?placeOfBirthLabel ?dateOfBirth ?dateOfDeath ?placeOfDeathLabel ?genderLabel ?countryCitizenshipLabel ?occupationLabel ?workLocationLabel ?exhibitionLabel ?collectionLabel ?influenceLabel WHERE {
@@ -1267,4 +1457,3 @@ def get_all_person_info_and_exhibitions_by_id(person_id, endpoint_url="https://q
                 break
 
     return None
-
