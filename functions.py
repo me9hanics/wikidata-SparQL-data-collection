@@ -465,7 +465,7 @@ def get_multiple_people_all_info(people, retries=3, delay=60):
 def get_multiple_people_all_info_fast_retry_missing(people, retries=3, delay=60):
     """
     Quickly query multiple people at once, then retry for missing instances separately.
-    Basically, running 'get_multiple_people_all_info' first, then 'get_all_person_info_improved' and 'get_all_person_info' for each missing instance separately.
+    Basically, running 'get_multiple_people_all_info' first, then 'get_all_person_info_improved' for each missing instance separately.
         If there are still missing instances, run 'get_person_all_info_different_languages' to check if they have an instance in non-English Wikipedia.
 
     Parameters:
@@ -483,20 +483,14 @@ def get_multiple_people_all_info_fast_retry_missing(people, retries=3, delay=60)
         person_info = get_all_person_info_improved(person) #these actually also collect the ID
         if person_info:
             gathered_people_separate_english.append(person_info)
-
-    still_missing = [p for p in missing_people if p not in [p['name'] for p in gathered_people_separate_english]]
-    for person in still_missing:
-        person_info = get_all_person_info(person)
-        if person_info:
-            gathered_people_separate_english.append(person_info)
     
-    still_missing_nonenglish = [p for p in still_missing if p not in [p['name'] for p in gathered_people_separate_english]]
+    missing_nonenglish = [p for p in missing_people if p not in [gathered_people_separate_english[k]['name'] for k in range(len(gathered_people_separate_english))]]
     gathered_people_separate_nonenglish = []
-    for person in still_missing_nonenglish:
+    for person in missing_nonenglish:
         person_info = get_person_all_info_different_languages(person)
         if person_info:
             gathered_people_separate_nonenglish.append(person_info)
-    return gathered_people_parallel + gathered_people_separate_english
+    return gathered_people_parallel + gathered_people_separate_english + gathered_people_separate_nonenglish
 
 
 def get_multiple_people_all_info_by_id(people_ids, retries=3, delay=60):
