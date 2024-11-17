@@ -465,7 +465,8 @@ def get_multiple_people_all_info(people, retries=3, delay=60):
 def get_multiple_people_all_info_fast_retry_missing(people, retries=3, delay=60):
     """
     Quickly query multiple people at once, then retry for missing instances separately.
-    Basically, running 'get_multiple_people_all_info' first and 'get_all_person_info' for each missing instance.
+    Basically, running 'get_multiple_people_all_info' first, then 'get_all_person_info_improved' and 'get_all_person_info' for each missing instance separately.
+        If there are still missing instances, run 'get_person_all_info_different_languages' to check if they have an instance in non-English Wikipedia.
 
     Parameters:
     - people, retries, delay: See at the top of the file.
@@ -473,17 +474,29 @@ def get_multiple_people_all_info_fast_retry_missing(people, retries=3, delay=60)
     Returns:
     - list: List of dictionaries for each person.
     """
-    gathered_people_fast = get_multiple_people_all_info(people, retries, delay)
-    collected_names = [gathered_people_fast[k]['name'] for k in range(len(gathered_people_fast))]
+    gathered_people_parallel = get_multiple_people_all_info(people, retries, delay)
+    collected_names = [gathered_people_parallel[k]['name'] for k in range(len(gathered_people_parallel))]
     missing_people = [p for p in people if p not in collected_names]
 
-    gathered_people_slow = []
+    gathered_people_separate_english = []
     for person in missing_people:
+        person_info = get_all_person_info_improved(person) #these actually also collect the ID
+        if person_info:
+            gathered_people_separate_english.append(person_info)
+
+    still_missing = [p for p in missing_people if p not in [p['name'] for p in gathered_people_separate_english]]
+    for person in still_missing:
         person_info = get_all_person_info(person)
         if person_info:
-            gathered_people_slow.append(person_info)
-
-    return gathered_people_fast + gathered_people_slow
+            gathered_people_separate_english.append(person_info)
+    
+    still_missing_nonenglish = [p for p in still_missing if p not in [p['name'] for p in gathered_people_separate_english]]
+    gathered_people_separate_nonenglish = []
+    for person in still_missing_nonenglish:
+        person_info = get_person_all_info_different_languages(person)
+        if person_info:
+            gathered_people_separate_nonenglish.append(person_info)
+    return gathered_people_parallel + gathered_people_separate_english
 
 
 def get_multiple_people_all_info_by_id(people_ids, retries=3, delay=60):
@@ -536,6 +549,8 @@ def get_multiple_people_all_info_by_id(people_ids, retries=3, delay=60):
 
 def get_multiple_people_all_info_by_id_fast_retry_missing(people_ids, retries=3, delay=60):
     """
+    NOTE: Unlike 'get_multiple_people_all_info_fast_retry_missing', here there is no attempt to look for non-English Wikipedia instances.
+
     Get all information about multiple people from Wikidata by their IDs, with retry for missing instances.
 
     Parameters:
@@ -545,17 +560,17 @@ def get_multiple_people_all_info_by_id_fast_retry_missing(people_ids, retries=3,
     Returns:
     - list: List of dictionaries for each person.
     """
-    gathered_people_fastly = get_multiple_people_all_info_by_id(people_ids, retries, delay)
-    collected_ids = [gathered_people_fastly[k]['id'] for k in range(len(gathered_people_fastly))]
+    gathered_people_parallel = get_multiple_people_all_info_by_id(people_ids, retries, delay)
+    collected_ids = [gathered_people_parallel[k]['id'] for k in range(len(gathered_people_parallel))]
     missing_people_ids = [id for id in people_ids if id not in collected_ids]
 
-    gathered_people_slowly = []
+    gathered_people_separate= []
     for person_id in missing_people_ids:
         person_info = get_all_person_info_by_id(person_id)
         if person_info:
-            gathered_people_slowly.append(person_info)
+            gathered_people_separate.append(person_info)
 
-    return gathered_people_fastly + gathered_people_slowly
+    return gathered_people_parallel + gathered_people_separate
 
 
 ####################################### Queries for 1 person #######################################
