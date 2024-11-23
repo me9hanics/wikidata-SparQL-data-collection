@@ -367,51 +367,6 @@ def stringlist_to_list(stringlist):
 
 ####################################### Queries for multiple instances (people) #######################################
 
-def get_multiple_people_all_info_separate_responses(people, retries=3, delay=60):
-    """
-    NOTE: Only use this if you want to handle the responses separately.
-    Otherwise, consider using 'get_multiple_people_all_info_fast_retry_missing' or 'get_multiple_people_all_info'.
-
-    Get all information about multiple people from Wikidata.
-
-    Parameters:
-    - people, retries, delay: See at the top of the file.
-
-    Returns:
-    - list: List of responses (dictionaries) for each person.
-    """
-    #First, reduce the number of people in one query
-    chunks = [people[i:i + 150] for i in range(0, len(people), 150)]
-    responses = []
-    for chunk in chunks:
-        people_string = ' '.join(f'"{p}"' for p in chunk)
-        query = f'''
-        SELECT ?person ?personLabel ?placeOfBirthLabel ?dateOfBirth ?dateOfDeath ?placeOfDeathLabel ?workLocationLabel ?startTime ?endTime ?pointInTime ?genderLabel ?citizenshipLabel ?occupationLabel WHERE {{
-          VALUES ?personLabel {{ {people_string} }}
-          ?person ?label ?personLabel.
-          ?person wdt:P31 wd:Q5.  #Ensure it's an instance of human, could happen that it's a statue of the person or something
-          ?person wdt:P19 ?placeOfBirth.
-          ?person wdt:P569 ?dateOfBirth.
-          ?person wdt:P570 ?dateOfDeath.
-          ?person wdt:P20 ?placeOfDeath.
-          OPTIONAL {{ ?person wdt:P21 ?gender. }}
-          OPTIONAL {{ ?person wdt:P27 ?citizenship. }}
-          OPTIONAL {{ ?person wdt:P106 ?occupation. }}
-          OPTIONAL {{
-            ?person p:P937 ?workStmt.
-            ?workStmt ps:P937 ?workLocation.
-            OPTIONAL {{ ?workStmt pq:P580 ?startTime. }}
-            OPTIONAL {{ ?workStmt pq:P582 ?endTime. }}
-            OPTIONAL {{ ?workStmt pq:P585 ?pointInTime. }}
-          }}
-          SERVICE wikibase:label {{ bd:serviceParam wikibase:language "en". }}
-        }}
-        '''
-        response_json = sparql_query(query, retries, delay)
-        responses.append(response_json)
-    return responses
-
-
 def get_multiple_people_all_info(people, retries=3, delay=60):
     """
     NOTE: Querying multiple people at once is faster than querying them separately, however might miss some instances.
@@ -491,6 +446,170 @@ def get_multiple_people_all_info_fast_retry_missing(people, retries=3, delay=60)
         if person_info:
             gathered_people_separate_nonenglish.append(person_info)
     return gathered_people_parallel + gathered_people_separate_english + gathered_people_separate_nonenglish
+
+
+def get_multiple_people_all_info_separate_responses(people, retries=3, delay=60):
+    """
+    NOTE: Only use this if you want to handle the responses separately.
+    Otherwise, consider using 'get_multiple_people_all_info_fast_retry_missing' or 'get_multiple_people_all_info'.
+
+    Get all information about multiple people from Wikidata.
+
+    Parameters:
+    - people, retries, delay: See at the top of the file.
+
+    Returns:
+    - list: List of responses (dictionaries) for each person.
+    """
+    #First, reduce the number of people in one query
+    chunks = [people[i:i + 150] for i in range(0, len(people), 150)]
+    responses = []
+    for chunk in chunks:
+        people_string = ' '.join(f'"{p}"' for p in chunk)
+        query = f'''
+        SELECT ?person ?personLabel ?placeOfBirthLabel ?dateOfBirth ?dateOfDeath ?placeOfDeathLabel ?workLocationLabel ?startTime ?endTime ?pointInTime ?genderLabel ?citizenshipLabel ?occupationLabel WHERE {{
+          VALUES ?personLabel {{ {people_string} }}
+          ?person ?label ?personLabel.
+          ?person wdt:P31 wd:Q5.  #Ensure it's an instance of human, could happen that it's a statue of the person or something
+          ?person wdt:P19 ?placeOfBirth.
+          ?person wdt:P569 ?dateOfBirth.
+          ?person wdt:P570 ?dateOfDeath.
+          ?person wdt:P20 ?placeOfDeath.
+          OPTIONAL {{ ?person wdt:P21 ?gender. }}
+          OPTIONAL {{ ?person wdt:P27 ?citizenship. }}
+          OPTIONAL {{ ?person wdt:P106 ?occupation. }}
+          OPTIONAL {{
+            ?person p:P937 ?workStmt.
+            ?workStmt ps:P937 ?workLocation.
+            OPTIONAL {{ ?workStmt pq:P580 ?startTime. }}
+            OPTIONAL {{ ?workStmt pq:P582 ?endTime. }}
+            OPTIONAL {{ ?workStmt pq:P585 ?pointInTime. }}
+          }}
+          SERVICE wikibase:label {{ bd:serviceParam wikibase:language "en". }}
+        }}
+        '''
+        response_json = sparql_query(query, retries, delay)
+        responses.append(response_json)
+    return responses
+
+
+def get_multiple_people_wikidata_ids(people, retries=3, delay0=1, delay1=20, delay2=60, return_counts=False, return_extended=False, return_most_common=False):
+    """
+    Retrieve (only) Wikidata IDs for multiple people.
+    This is useful to further query information afterwards, using the IDs (which get faster responses).
+
+    Parameters:
+    - people, retries, delay0, delay1, delay2: See at the top of the file.
+    - return_counts (bool): Whether to return the counts of response results for each person.
+    - return_extended (bool): Whether to return the extended results (all IDs) for each person, or just the last one, or...
+    - return_most_common (bool): Return the most common ID gathered for each person.
+
+    Returns:
+    - dict or tuple: Dictionary of person names and their Wikidata IDs.
+    - (optional) dict: Dictionary of person names and their counts of results.
+
+    Warning:
+    - If return_most_common and return_extended are both True, only return_extended will be used.
+    """
+    from collections import Counter
+    if return_most_common and return_extended:
+        print("Both return_most_common and return_extended are True. Only return_extended will be used.")
+
+    chunks = [people[i:i + 150] for i in range(0, len(people), 150)]
+    all_wikidata_ids = {}
+    result_counts = {}
+    extended_results = {}
+
+    for chunk in chunks:
+        people_string = ' '.join(f'"{p}"' for p in chunk)
+        query = f'''
+        SELECT ?person ?personLabel WHERE {{
+          VALUES ?personLabel {{ {people_string} }}
+          ?person ?label ?personLabel.
+          ?person wdt:P31 wd:Q5.
+          SERVICE wikibase:label {{ bd:serviceParam wikibase:language "[AUTO_LANGUAGE],*". }}
+        }}
+        ''' #?person wdt:P31 wd:Q5. : Ensure instances of humans
+
+        for attempt in range(retries):
+            response = requests.get("https://query.wikidata.org/sparql", params={'query': query, 'format': 'json'})
+
+            if response.status_code == 200:
+                data = response.json()
+                results = data.get('results', {}).get('bindings', [])
+                for person_name in chunk:
+                    person_results = [r for r in results if r.get('personLabel', {}).get('value') == person_name]
+                    result_counts[person_name] = len(person_results)
+                    if person_results:
+                        if return_extended or return_most_common:
+                            extended_results[person_name] = [r.get('person', {}).get('value').split('/')[-1] for r in person_results if 'entity/Q' in r.get('person', {}).get('value')]
+                        else:
+                            for result in person_results:
+                                person = result.get('person', {}).get('value', None)
+                                if person and 'entity/Q' in person:
+                                    wikidata_id = person.split('/')[-1]
+                                    all_wikidata_ids[person_name] = wikidata_id
+                                    break
+                break
+            elif response.status_code in [408, 429, 500, 502, 503, 504]:
+                if attempt == 0:
+                    time.sleep(delay0)
+                elif attempt == 1:
+                    time.sleep(delay1)
+                elif attempt == 2:
+                    time.sleep(delay2)
+            elif response.status_code in [400, 404]:
+                print(f"Error: {response.status_code}")
+                break
+            else:
+                print(f"Error: {response.status_code}, attempt {attempt + 1}/{retries}, chunk: {chunk}, response: {response.text}")
+
+    if return_most_common:
+        most_common_ids = {}
+        for person_name, ids in extended_results.items():
+            if ids:
+                most_common_id = Counter(ids).most_common(1)[0][0]
+                most_common_ids[person_name] = most_common_id
+        if return_counts:
+            return most_common_ids, result_counts
+        else:
+            return most_common_ids
+
+    if return_counts and return_extended:
+        return extended_results, result_counts
+    elif return_counts:
+        return all_wikidata_ids, result_counts
+    elif return_extended:
+        return extended_results
+    else:
+        return all_wikidata_ids
+
+
+def get_multiple_people_wikidata_ids_retry_missing(people, retries=3, delay0=1, delay1=20, delay2=60):
+    """
+    Gather Wikidata IDs for multiple people in one query, then retry missing instances with separate queries.
+
+    Parameters:
+    - people, retries, delay0, delay1, delay2: See at the top of the file.
+
+    Returns:
+    - dict: Dictionary of person names and their Wikidata IDs.
+    """
+    gathered_ids_parallel = get_multiple_people_wikidata_ids(people, retries, delay0, delay1, delay2, return_counts=False, return_extended=False, return_most_common=True)
+    collected_names = list(gathered_ids_parallel.keys())
+    missing_people = [p for p in people if p not in collected_names]
+
+    gathered_ids_separate = {}
+    for person in missing_people:
+        person_id = get_person_wikidata_id(person)
+        if person_id:
+            gathered_ids_separate[person] = person_id
+        if not person_id:
+            person_id = get_person_wikidata_id_different_languages(person)
+            if person_id:
+                gathered_ids_separate[person] = person_id
+
+    return {**gathered_ids_parallel, **gathered_ids_separate} #concatenated
 
 
 def get_multiple_people_all_info_by_id(people_ids, retries=3, delay=60):
@@ -1172,6 +1291,48 @@ def get_places_with_years_from_response(response):
 
 ######## Queries with or by Wikidata ID ########
 def get_person_wikidata_id(person_name, retries = 3, delay0 = 1, delay1=20, delay2=60):
+    """
+    Get the Wikidata ID of a person by their name.
+    
+    Parameters:
+    - person_name, retries, delay0, delay1, delay2: See at the top of the file.
+    
+    Returns:
+    - str or None: Wikidata ID (starting with a Q) of the person if successful, None otherwise"""
+    query = '''
+    SELECT ?person ?personLabel WHERE{
+    ?person ?label "%s"@en.
+    ?person wdt:P31 wd:Q5.  #Ensure it's an instance of human, could happen that it's a statue of the person or something
+    SERVICE wikibase:label { bd:serviceParam wikibase:language "[AUTO_LANGUAGE],en". }
+    }
+    '''% person_name.replace('"', '\"')
+
+    for attempt in range(retries):
+        response = requests.get("https://query.wikidata.org/sparql", params={'query': query, 'format': 'json'})
+        
+        if response.status_code == 200: #Successful
+            data = response.json()
+            results = data.get('results', {}).get('bindings', [])
+            if results:
+                for result in results:
+                    person = result.get('person', {}).get('value', None)
+                    label = result.get('personLabel', {}).get('value', None)
+                    if person and 'entity/Q' in person and label: #We get a ton of results, and almost all of them a gibberish, so we need to filter them
+                        wikidata_id = person.split('/')[-1] # Extract Wikidata ID from URL
+                        return wikidata_id
+        elif response.status_code in [408, 429, 500, 502, 503, 504]:
+            if attempt == 0:
+                time.sleep(delay0)
+            elif attempt == 1:
+                time.sleep(delay1)
+            elif attempt == 2:
+                time.sleep(delay2)
+        elif response.status_code in [400, 404]:
+            print("Error: %s"%response.status_code)
+            return None
+    return None
+
+def get_person_wikidata_id_different_languages(person_name, retries = 3, delay0 = 1, delay1=20, delay2=60):
     """
     Get the Wikidata ID of a person by their name.
     
