@@ -365,6 +365,22 @@ def stringlist_to_list(stringlist):
     return ast.literal_eval(stringlist) #but this functionality is already included in it
 
 
+def results_dataframe(all_people_info: list | dict):
+    """
+    Create a DataFrame from the list of people's information.
+
+    Parameters:
+    - all_people_info (list or dict): The list or dictionary containing the information.
+
+    Returns:
+    - DataFrame: The DataFrame containing the information.
+    """
+    import pandas as pd
+    if isinstance(all_people_info, dict) or isinstance(all_people_info, list):
+        return pd.DataFrame.from_dict(all_people_info)
+    raise ValueError("Input should be a list or dictionary.")
+
+
 ####################################### Queries for multiple instances (people) #######################################
 
 def get_multiple_people_all_info(people, retries=3, delay=60):
