@@ -376,7 +376,9 @@ def results_dataframe(all_people_info: list | dict):
     - DataFrame: The DataFrame containing the information.
     """
     import pandas as pd
-    if isinstance(all_people_info, dict) or isinstance(all_people_info, list):
+    if isinstance(all_people_info, dict):
+        return pd.DataFrame.from_dict([all_people_info])
+    if isinstance(all_people_info, list):
         return pd.DataFrame.from_dict(all_people_info)
     raise ValueError("Input should be a list or dictionary.")
 
