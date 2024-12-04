@@ -66,6 +66,7 @@ def sparql_query_by_dict(variable_names, WHERE_dict, endpoint_url="https://query
     Parameters:
     - variable_names (list of str): List of variable names to select.
     - WHERE_dict (dict): Dictionary where keys are variable names and values are conditions.
+            Example: WHERE_dict = {'painter': "wdt:P31 wd:Q5;", 'occupation': "wdt:P106 ?occupation." ... }
     - endpoint_url, retries, delay: See at the top of the file.
 
     Returns:
@@ -438,7 +439,7 @@ def get_multiple_people_all_info(people, retries=3, delay=60):
 def get_multiple_people_all_info_fast_retry_missing(people, retries=3, delay=60):
     """
     Quickly query multiple people at once, then retry for missing instances separately.
-    Basically, running 'get_multiple_people_all_info' first, then 'get_all_person_info_improved' for each missing instance separately.
+    Basically, running 'get_multiple_people_all_info' first, then 'get_all_person_info_strict' for each missing instance separately.
         If there are still missing instances, run 'get_person_all_info_different_languages' to check if they have an instance in non-English Wikipedia.
 
     Parameters:
@@ -453,7 +454,7 @@ def get_multiple_people_all_info_fast_retry_missing(people, retries=3, delay=60)
 
     gathered_people_separate_english = []
     for person in missing_people:
-        person_info = get_all_person_info_improved(person) #these actually also collect the ID
+        person_info = get_all_person_info_strict(person) #these actually also collect the ID
         if person_info:
             gathered_people_separate_english.append(person_info)
     
@@ -804,7 +805,7 @@ def get_all_person_info(person_name, endpoint_url="https://query.wikidata.org/sp
     return None
 
 
-def get_all_person_info_improved(person_name, endpoint_url="https://query.wikidata.org/sparql", retries=3, delay0=1, delay1=20, delay2=60, silent = True):
+def get_all_person_info_strict(person_name, endpoint_url="https://query.wikidata.org/sparql", retries=3, delay0=1, delay1=20, delay2=60, silent = True):
     """
     An improved version of get_all_person_info.
     Basically, same as get_all_person_info but restricts to just human instances
@@ -889,7 +890,7 @@ def get_all_person_info_improved(person_name, endpoint_url="https://query.wikida
 def get_person_all_info_different_languages(person_name, endpoint_url="https://query.wikidata.org/sparql", retries=3, delay0=1, delay1=20, delay2=60, silent = True):
     #Change in the query: language can be anything. Drawback: doesn't detect aliases
     """
-    Same as get_all_person_info_improved, but searching in all languages.
+    Same as get_all_person_info_strict, but searching in all languages.
     The drawback is that that person_name string must match the name in the database, so aliases are not detected.
     
     Parameters:
@@ -1044,7 +1045,7 @@ def get_person_info_retry_after(person_name, placeofbirth_return = True, dateofb
 
 def get_person_info(person_name, endpoint_url="https://query.wikidata.org/sparql", retries=3, delay=1):
     """
-    NOTE: Not recommended, using get_all_person_info_improved or get_person_info_retry_after is more effective.
+    NOTE: Not recommended, using get_all_person_info_strict or get_person_info_retry_after is more effective.
 
     Get all information about a person from Wikidata.
 
