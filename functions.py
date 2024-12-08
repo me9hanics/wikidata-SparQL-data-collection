@@ -59,7 +59,7 @@ def sparql_query(query,  retries=3, delay=10):
     return None
 
 
-def sparql_query_by_dict(variable_names, WHERE_dict, endpoint_url="https://query.wikidata.org/sparql", retries=3, delay=10):
+def sparql_query_by_dict(variable_names, WHERE_dict, multiple_people_list = None, multiple_people_var_name = "person", language_param = "[AUTO_LANGUAGE],en" , retries=3, delay=10):
     """
     Make a SPARQL query using a dictionary to construct the WHERE clause.
 
@@ -67,7 +67,14 @@ def sparql_query_by_dict(variable_names, WHERE_dict, endpoint_url="https://query
     - variable_names (list of str): List of variable names to select.
     - WHERE_dict (dict): Dictionary where keys are variable names and values are conditions.
             Example: WHERE_dict = {'painter': "wdt:P31 wd:Q5;", 'occupation': "wdt:P106 ?occupation." ... }
-    - endpoint_url, retries, delay: See at the top of the file.
+    - multiple_people_list (list of str or None): If querying multiple people, list of names to query for. 
+            If None, include the only person in the WHERE clause.
+    - multiple_people_variable_name (str or None): If querying multiple people, the name of the variable corresponding to values.
+            A typical example: if "person", the WHERE clause will start with "VALUES ?personLabel { {multiple_people_list} }", followed up with "?person ?label ?personLabel."
+            Do not forget to include the corresponding SELECT variable in variable_names.
+    - language_param (str): The language label in the service parameter.
+            Usually "[AUTO_LANGUAGE],en" or "en".
+    - retries, delay: See at the top of the file.
 
     Returns:
     - dict or None: The JSON response of the query if successful, None otherwise.
@@ -75,9 +82,19 @@ def sparql_query_by_dict(variable_names, WHERE_dict, endpoint_url="https://query
     #Example dict: {'painter': "wdt:P31 wd:Q5;", ... }
     select = "SELECT " + " ".join([f"?{name}" for name in variable_names])
     where = " WHERE {\n"
+
+    if type(multiple_people_list) == list:
+        """
+        VALUES ?personLabel { "Vincent van Gogh" "Pablo Picasso" }
+        ?person ?label ?personLabel.
+        """
+        people_string = ' '.join(f'"{p}"' for p in multiple_people_list)
+        where += f'VALUES ?{multiple_people_var_name}Label {{ {people_string} }}\n'
+        where += f"?{multiple_people_var_name} ?label ?{multiple_people_var_name}Label.\n"
+
     for variable, value in WHERE_dict.items():
         where += f"?{variable} {value}\n"
-    service = '\nSERVICE wikibase:label { bd:serviceParam wikibase:language "[AUTO_LANGUAGE],en". }' #Need to watch out for quotation marks
+    service = '\nSERVICE wikibase:label { bd:serviceParam wikibase:language "' + language_param + '". }\n}' #Watch out for quotation marks
     
     query = select + where + service
     return sparql_query(query, retries, delay)
