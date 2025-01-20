@@ -237,6 +237,25 @@ def create_person_info_from_results(person_name, person_results):
     return person_info
 
 
+def get_id_from_results(person_results):
+    """
+    Get the Wikidata ID from the SPARQL query results.
+
+    Parameters:
+    - results (list of dict): The results from the SPARQL query.
+
+    Returns:
+    - str or None: The Wikidata ID of the person if found, None otherwise.
+    """
+    if person_results:
+        ids = [result.get('person', {}).get('value', "").split('/')[-1] for result in person_results]
+        ids = [i for i in ids if re.match(r'^Q\d+$', i)]
+        id_counts = {i: ids.count(i) for i in ids}
+        most_common_id = max(id_counts, key=id_counts.get)
+        return most_common_id
+    return None
+
+
 def create_person_info_from_results_with_id(person_id, person_results):
     """
     Create a dictionary with person information from SPARQL query results, including the person's ID.
@@ -449,6 +468,7 @@ def get_multiple_people_all_info(people, retries=3, delay=60):
             person_results = [r for r in results if r.get('personLabel', {}).get('value') == person_name]
             if person_results:
                 person_info = create_person_info_from_results(person_name, person_results)
+                person_info['id'] = get_id_from_results(person_results)
                 all_people_info.append(person_info)
     return all_people_info
 
@@ -859,23 +879,14 @@ def get_all_person_info_strict(person_name, endpoint_url="https://query.wikidata
             data = response.json()
             results = data.get('results', {}).get('bindings', [])
             if results:
-                ids = [result['person']['value'].split('/')[-1] for result in results]
-                acceptable_ids = [i for i in ids if re.match(r'^Q\d+$', i)]
-
-                if acceptable_ids:
+                id = get_id_from_results(results)
+                if id:
                     person_info = create_person_info_from_results(person_name, results)
-
-                    id_counts = {i: ids.count(i) for i in acceptable_ids}
-                    most_common_id = max(id_counts, key=id_counts.get)
-                    if id_counts[ids[0]] == max(id_counts.values()):
-                        person_info['id'] = ids[0]
-                    else:
-                        person_info['id'] = most_common_id
+                    person_info['id'] = id
                     return person_info
                 else:
                     if not silent:
                         print(f"{person_name} has no valid ID.")
-                    
                     return None
         
             break #Don't need to try again, we have the data
