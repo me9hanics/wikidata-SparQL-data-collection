@@ -469,19 +469,13 @@ def get_multiple_people_all_info_fast_retry_missing(people, retries=3, delay=60)
     collected_names = [gathered_people_parallel[k]['name'] for k in range(len(gathered_people_parallel))]
     missing_people = [p for p in people if p not in collected_names]
 
-    gathered_people_separate_english = []
+    gathered_people_separate = []
     for person in missing_people:
         person_info = get_all_person_info_strict(person) #these actually also collect the ID
         if person_info:
-            gathered_people_separate_english.append(person_info)
+            gathered_people_separate.append(person_info)
     
-    missing_nonenglish = [p for p in missing_people if p not in [gathered_people_separate_english[k]['name'] for k in range(len(gathered_people_separate_english))]]
-    gathered_people_separate_nonenglish = []
-    for person in missing_nonenglish:
-        person_info = get_person_all_info_different_languages(person)
-        if person_info:
-            gathered_people_separate_nonenglish.append(person_info)
-    return gathered_people_parallel + gathered_people_separate_english + gathered_people_separate_nonenglish
+    return gathered_people_parallel + gathered_people_separate
 
 
 def get_multiple_people_all_info_separate_responses(people, retries=3, delay=60):
@@ -907,6 +901,7 @@ def get_all_person_info_strict(person_name, endpoint_url="https://query.wikidata
 def get_person_all_info_different_languages(person_name, endpoint_url="https://query.wikidata.org/sparql", retries=3, delay0=1, delay1=20, delay2=60, silent = True):
     #Change in the query: language can be anything. Drawback: doesn't detect aliases
     """
+    TODO: Needs some redesign: gather all results in a list as get_all_person_info_strict (e.g. occupation)
     Same as get_all_person_info_strict, but searching in all languages.
     The drawback is that that person_name string must match the name in the database, so aliases are not detected.
     
@@ -916,6 +911,8 @@ def get_person_all_info_different_languages(person_name, endpoint_url="https://q
     Returns:
     - dict or None: Data dictionary about the person if successful, None otherwise
     """
+    raise NotImplementedError("This function shall be updated. Use get_all_person_info_strict instead,\
+                               which also seems to collect instances of every language (making this obsolete).")
     query = '''
     SELECT ?person ?personLabel ?placeOfBirthLabel ?dateOfBirth ?dateOfBirthLabel ?dateOfDeath ?dateOfDeathLabel ?placeOfDeathLabel ?workLocationLabel ?startTime ?endTime ?pointInTime ?genderLabel ?citizenshipLabel ?occupationLabel WHERE {
         ?person ?label "%s".
