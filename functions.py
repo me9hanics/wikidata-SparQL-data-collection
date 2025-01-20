@@ -324,30 +324,6 @@ def create_person_info_from_results_with_id(person_id, person_results):
     return person_info
 
 
-def get_places_from_response(response, silent=True):
-    """
-    Extract work locations from the response.
-
-    Parameters:
-    - response (dict): The response dictionary containing person information.
-    - silent (bool): Whether to print out errors or not.
-
-    Returns:
-    - str: A string representation of the list of places.
-    """
-    places = []
-    try:
-        for place in response["work_locations"]:
-            if place["location"] not in places:
-                places.append(place["location"])
-            elif not silent:
-                print(f"{place['location']} already in list (person: {response['name']})")
-    except KeyError:
-        if not silent:
-            print(f"Could not find work_locations in response for person: {response['name']}")
-    return str(places)
-
-
 def find_year(string):
     """
     Extract the year from a string.
@@ -386,6 +362,80 @@ def get_years_from_response_location(response_location, silent=True):
             if not silent:
                 print(f"Could not find {key} or year in {key} for location: {response_location}")
     return years
+
+
+def get_places_from_response(response, silent=True, return_type = "comma_separated_string"):
+    """
+    Extract work locations from the response.
+
+    Parameters:
+    - response (dict): The response dictionary containing person information.
+    - silent (bool): Whether to print out errors or not.
+    - return_type (str): Return format, can be:
+        - "list": Places passed as a list
+        - "string": Places list converted to string, passed as a string
+        - "comma_separated_string": Places list joined with commas, passed as a string
+
+    Returns:
+    - str: A string representation of the list of places.
+    """
+    places = []
+    try:
+        for place in response["work_locations"]:
+            if place["location"] not in places:
+                places.append(place["location"])
+            elif not silent:
+                print(f"{place['location']} already in list (person: {response['name']})")
+    except KeyError:
+        if not silent:
+            print(f"Could not find work_locations in response for person: {response['name']}")
+    
+    if return_type == "comma_separated_string":
+        return ",".join(places)
+    if return_type == "string":
+        return str(places)
+    if return_type == "list":
+        return places
+    raise ValueError(f"Not known return_type: {return_type}")
+
+
+def get_places_with_years_from_response(response, silent=True, return_type = "list", dates_separator = ","):
+    """
+    Extract places with temporal data (years) from the response.
+
+    Parameters:
+    - response (dict): The response dictionary, containing person information.
+    - silent (bool): Whether to print out errors or not.
+    - return_type (str): Return format, can be:
+        - "list": Places with years passed as a list
+        - "string": Places with years list converted to string, passed as a string
+        - "semicolon_separated_string": Places with years list joined with semicolons between instances, passed as a string
+
+    Returns:
+    - str: String representation of the places with years
+    """
+    places = []
+    for place in response["work_locations"]:
+        years = get_years_from_response_location(place, silent=silent)
+        if years != []:
+            min_year = min(years); max_year = max(years)
+            #Checking if the location is already in the list
+            if not any(p.split(':')[0] == place["location"] for p in places):#Just get the part before the colon, which is the location's name
+                places.append(f"{place['location']}:{min_year}-{max_year}")
+            else:
+                #Find the index of the location in the places list
+                for i, p in enumerate(places):
+                    if p.split(':')[0] == place["location"]:
+                        #Add these years next to the existing years
+                        places[i] = f"{p}{dates_separator}{min_year}-{max_year}"
+                        break
+    if return_type == "semicolon_separated_string":
+        return ";".join(places)
+    if return_type == "string":
+        return str(places)
+    if return_type == "list":
+        return places
+    raise ValueError(f"Not known return_type: {return_type}")
 
 
 def stringlist_to_list(stringlist):
@@ -737,7 +787,7 @@ def get_multiple_people_all_info_by_id_fast_retry_missing(people_ids, retries=3,
 
 
 ####################################### Queries for 1 person #######################################
-#(SPARQL query)
+#(SPARQL queries). Exhibitions: see below at "queries by Wikidata ID"
 
 def get_all_person_info(person_name, endpoint_url="https://query.wikidata.org/sparql", retries=3, delay0=1, delay1=20, delay2=60):
     """
@@ -1238,8 +1288,6 @@ def get_person_aliases(person_name):
     pass
 
 
-######## Location querying ########
-#Exhibitions: See below, at Wikidata ID queries
 def get_person_locations(person_name, endpoint_url="https://query.wikidata.org/sparql", retries=3, delay=1):
     """
     Get all work locations of a person from Wikidata.
@@ -1303,35 +1351,6 @@ def get_person_locations(person_name, endpoint_url="https://query.wikidata.org/s
                 break
 
     return None
-
-
-def get_places_with_years_from_response(response):
-    """
-    Extract places with temporal data (years) from the response.
-
-    Parameters:
-    - response (dict): The response dictionary, containing person information.
-
-    Returns:
-    - str: String representation of the places with years
-    """
-    places = []
-    for place in response["work_locations"]:
-        years = get_years_from_response_location(place)
-        if years != []:
-            min_year = min(years); max_year = max(years)
-            #Checking if the location is already in the list
-            if not any(p.split(':')[0] == place["location"] for p in places):#Just get the part before the colon, which is the location's name
-                places.append(f"{place['location']}:{min_year}-{max_year}")
-            else:
-                #Find the index of the location in the places list
-                for i, p in enumerate(places):
-                    if p.split(':')[0] == place["location"]:
-                        #Add these years next to the existing years
-                        places[i] = f"{p},{min_year}-{max_year}"
-                        break
-    return str(places)
-
 
 ######## Queries with or by Wikidata ID ########
 def get_person_wikidata_id(person_name, retries = 3, delay0 = 1, delay1=20, delay2=60):
