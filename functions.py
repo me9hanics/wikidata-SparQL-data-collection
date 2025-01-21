@@ -436,7 +436,8 @@ def get_places_with_years_from_response(response, silent=True, return_type = "li
     Extract places with temporal data (years) from the response.
 
     Parameters:
-    - response (dict): The response dictionary, containing person information.
+    - response (dict | str): Either the response dictionary (with person data),
+                             or a string representation of response['location_dates'].
     - silent (bool): Whether to print out errors or not.
     - return_type (str): Return format, can be:
         - "list": Places with years passed as a list
@@ -447,17 +448,25 @@ def get_places_with_years_from_response(response, silent=True, return_type = "li
     - str: String representation of the places with years
     """
     places = []
-    for place in response["location_dates"]:
-        years = get_years_from_response_location(place, silent=silent)
+    if type(response)==str:
+        response = stringlist_to_list(response)
+        if type(response) == list:
+            location_results = response
+        elif type(response) == dict:
+            location_results = response['location_dates']
+    else:
+        location_results = response["location_dates"]
+    for loc_result in location_results:
+        years = get_years_from_response_location(loc_result, silent=silent)
         if years != []:
             min_year = min(years); max_year = max(years)
             #Checking if the location is already in the list
-            if not any(p.split(':')[0] == place["location"] for p in places):#Just get the part before the colon, which is the location's name
-                places.append(f"{place['location']}:{min_year}-{max_year}")
+            if not any(p.split(':')[0] == loc_result["location"] for p in places):#Just get the part before the colon, which is the location's name
+                places.append(f"{loc_result['location']}:{min_year}-{max_year}")
             else:
                 #Find the index of the location in the places list
                 for i, p in enumerate(places):
-                    if p.split(':')[0] == place["location"]:
+                    if p.split(':')[0] == loc_result["location"]:
                         #Add these years next to the existing years
                         places[i] = f"{p}{dates_separator}{min_year}-{max_year}"
                         break
