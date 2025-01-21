@@ -184,57 +184,93 @@ def get_query_from_input(person, placeofbirth = True, dateofbirth = True, dateof
     return query
 
 
-def create_person_info_from_results(person_name, person_results):
+def linear_thresholding(high, low = 0, rate = 1/2.5, shift=0.5):
     """
-    Create a dictionary with person information from SPARQL query results.
+    Return the 0-1 cutoff threshold from a linear regression function.
+    Default argument values represent a model that accepts 1, when high = 1, but does not accept 2 when high = 4.
+    The cutoff point is (high-low)*rate + low + shift. Typically, high is the maximum value, low is 0.
 
     Parameters:
-    - person_name (str): The name of the person.
-    - person_results (list of dict): The results from the SPARQL query.
+    - high (int|float): Typically the maximum value.
+    - low (int|float): Typically the minimum value.
+    - rate (float): The rate of the linear function.
+    - shift (float): The shift in x-axis.
 
     Returns:
-    - dict: A dictionary containing the person's information.
+    - float: The threshold value.
     """
-    person_info = {
-        'name': person_name,
-        'birth_place': None,
-        'birth_date': None,
-        'death_date': None,
-        'death_place': None,
-        'gender': None,
-        'citizenship': None,
-        'occupation': [],
-        'work_locations': [],
-    }
-    for result in person_results:
-        if not person_info['birth_place']:
-            person_info['birth_place'] = result.get('placeOfBirthLabel', {}).get('value', None)
-        if not person_info['birth_date']:
-            person_info['birth_date'] = result.get('dateOfBirth', {}).get('value', None)
-        if not person_info['death_date']:
-            person_info['death_date'] = result.get('dateOfDeath', {}).get('value', None)
-        if not person_info['death_place']:
-            person_info['death_place'] = result.get('placeOfDeathLabel', {}).get('value', None)
-        if not person_info['gender']:
-            person_info['gender'] = result.get('genderLabel', {}).get('value', None)
-        if not person_info['citizenship']:
-            person_info['citizenship'] = result.get('citizenshipLabel', {}).get('value', None)
+    threshold = (high-low)*rate + low + shift
+    return threshold
 
-        occupation = result.get('occupationLabel', {}).get('value', None)
-        if occupation and occupation not in person_info['occupation']:
-            person_info['occupation'].append(occupation)
 
-        work_location = result.get('workLocationLabel', {}).get('value', None)
-        if work_location:
-            location_info = {
-                'location': work_location,
-                'start_time': result.get('startTime', {}).get('value', None),
-                'end_time': result.get('endTime', {}).get('value', None),
-                'point_in_time': result.get('pointInTime', {}).get('value', None),
-            }
-            if location_info not in person_info['work_locations']:
-                person_info['work_locations'].append(location_info)
-    return person_info
+def key_value_counts(key, results):
+    """
+    Get the counts of each value for a key in SPARQL query results.
+
+    Parameters:
+    - key (str): The key to get the counts for.
+    - results (list of dict): Results dict (from the SPARQL query).
+
+    Returns:
+    - dict: A dictionary with the counts of each value for the key.
+    """
+    values = [result.get(key, {}).get('value', None) for result in results]
+    counts = {i: values.count(i) for i in values}
+    return counts
+
+
+def most_common_results(keys, results):
+    """
+    Get the most common values for a list of keys (from SPARQL query results).
+    
+    Parameters:
+    - keys (list of str): The keys to get the most common values for.
+    - results (list of dict): Results dict (from the SPARQL query).
+    
+    Returns:
+    - list: The most common value for each key."""
+    most_common_values = []
+    for key in keys:
+        counts = key_value_counts(key, results)
+        most_common = max(counts, key=counts.get)
+        most_common_values.append(most_common)
+
+    if len(most_common_values) == 1:
+        return most_common_values[0]
+    return most_common_values
+    
+
+def above_threshold_counts(keys, results, threshold=0.4, baseline="max", **kwargs):
+    """
+    For each key, collect only the list of values that have above threshold counts.
+
+    Parameters:
+    - keys (list of str): The keys to get the most common values for.
+    - results (list of dict): Results dict (from the SPARQL query).
+    - threshold (int|float): Threshold for counts. If an integer, it's the minimum count,
+        if a float, it's the minimum ratio. If it the string "linear", it's a linearly calculated threshold.
+    - baseline (str): The baseline for a float (ratio) threshold. Can be "max" or "total".
+    """
+    acceptable_values = []
+    for key in keys:
+        counts = key_value_counts(key, results)
+        if isinstance(threshold, int):
+            acceptable_values.append([i for i in counts if counts[i] >= threshold])
+        elif isinstance(threshold, float):
+            if baseline == "max":
+                high = max(counts.values())
+            else: #baseline == "total"
+                high = sum(counts.values())
+            acceptable_values.append([i for i in counts if (counts[i] / high >= threshold) and i is not None])
+        elif threshold == "linear":
+            high = max(counts.values())
+            acceptable_values.append([i for i in counts if (counts[i] >= linear_thresholding(high, **kwargs)) and i is not None])
+        else:
+            raise ValueError("Invalid threshold value.")
+    
+    if len(acceptable_values) == 1:
+        return acceptable_values[0]
+    return acceptable_values
 
 
 def get_id_from_results(person_results):
@@ -256,6 +292,50 @@ def get_id_from_results(person_results):
     return None
 
 
+def create_person_info_from_results(person_name, person_results):
+    """
+    Create a dictionary with person information from SPARQL query results.
+
+    Parameters:
+    - person_name (str): The name of the person.
+    - person_results (list of dict): Results dict (from the SPARQL query).
+
+    Returns:
+    - dict: A dictionary containing the person's information.
+    """
+    person_info = {
+        'name': person_name,
+        'birth_place': None,
+        'birth_date': None,
+        'death_date': None,
+        'death_place': None,
+        'gender': None,
+        'citizenship': None,
+        'locations': None,
+        'occupation': None,
+        'location_dates': [],
+    }
+    most_common_keys = most_common_results(['placeOfBirthLabel', 'dateOfBirth', 'dateOfDeath', 'placeOfDeathLabel',
+                                            'genderLabel', 'citizenshipLabel'], person_results)
+    person_info['birth_place'], person_info['birth_date'], person_info['death_date'] = most_common_keys[0], most_common_keys[1], most_common_keys[2]
+    person_info['death_place'], person_info['gender'], person_info['citizenship'] = most_common_keys[3], most_common_keys[4], most_common_keys[5]
+    person_info['occupation'] = ",".join(above_threshold_counts(['occupationLabel'], person_results, threshold="linear"))
+    acceptable_locations = above_threshold_counts(['workLocationLabel'], person_results, threshold="linear", rate=1/4, shift=0.49)
+    person_info['locations'] = ",".join(acceptable_locations)
+    for result in person_results:
+        work_location = result.get('workLocationLabel', {}).get('value', None)
+        if work_location in acceptable_locations:
+            location_info = {
+                'location': work_location,
+                'start_time': result.get('startTime', {}).get('value', None),
+                'end_time': result.get('endTime', {}).get('value', None),
+                'point_in_time': result.get('pointInTime', {}).get('value', None),
+            }
+            if location_info not in person_info['location_dates']:
+                person_info['location_dates'].append(location_info)
+    return person_info
+
+
 def create_person_info_from_results_with_id(person_id, person_results):
     """
     Create a dictionary with person information from SPARQL query results, including the person's ID.
@@ -269,58 +349,10 @@ def create_person_info_from_results_with_id(person_id, person_results):
     """
     #More information
     person_info = {
-        'name': person_results[0].get('personLabel', {}).get('value', None),
+        'name': most_common_results(['personLabel'], person_results),
         'id': person_id,
-        'birth_place': None,
-        'birth_date': None,
-        'death_date': None,
-        'death_place': None,
-        'gender': None,
-        'citizenship': None,
-        'occupation': [],
-        'work_locations': [],
-        'exhibited_at': [],
-        'influenced_by': [],
     }
-
-    for result in person_results:
-        if not person_info['name']:
-            person_info['name'] = result.get('personLabel', {}).get('value', None)
-        if not person_info['birth_place']:
-            person_info['birth_place'] = result.get('placeOfBirthLabel', {}).get('value', None)
-        if not person_info['birth_date']:
-            person_info['birth_date'] = result.get('dateOfBirth', {}).get('value', None)
-        if not person_info['death_date']:
-            person_info['death_date'] = result.get('dateOfDeath', {}).get('value', None)
-        if not person_info['death_place']:
-            person_info['death_place'] = result.get('placeOfDeathLabel', {}).get('value', None)
-        if not person_info['gender']:
-            person_info['gender'] = result.get('genderLabel', {}).get('value', None)
-        if not person_info['citizenship']:
-            person_info['citizenship'] = result.get('citizenshipLabel', {}).get('value', None)
-
-        occupation = result.get('occupationLabel', {}).get('value', None)
-        if occupation and occupation not in person_info['occupation']:
-            person_info['occupation'].append(occupation)
-
-        work_location = result.get('workLocationLabel', {}).get('value', None)
-        if work_location:
-            location_info = {
-                'location': work_location,
-                'start_time': result.get('startTime', {}).get('value', None),
-                'end_time': result.get('endTime', {}).get('value', None),
-                'point_in_time': result.get('pointInTime', {}).get('value', None),
-            }
-            if location_info not in person_info['work_locations']:
-                person_info['work_locations'].append(location_info)
-
-        collection = result.get('collectionLabel', {}).get('value', None)
-        if collection and collection not in person_info['exhibited_at']:
-            person_info['exhibited_at'].append(collection)
-
-        influence = result.get('influenceLabel', {}).get('value', None)
-        if influence and influence not in person_info['influenced_by']:
-            person_info['influenced_by'].append(influence)
+    person_info.update(create_person_info_from_results(person_info['name'], person_results))
     return person_info
 
 
@@ -381,14 +413,14 @@ def get_places_from_response(response, silent=True, return_type = "comma_separat
     """
     places = []
     try:
-        for place in response["work_locations"]:
+        for place in response["location_dates"]:
             if place["location"] not in places:
                 places.append(place["location"])
             elif not silent:
                 print(f"{place['location']} already in list (person: {response['name']})")
     except KeyError:
         if not silent:
-            print(f"Could not find work_locations in response for person: {response['name']}")
+            print(f"Could not find location_dates in response for person: {response['name']}")
     
     if return_type == "comma_separated_string":
         return ",".join(places)
@@ -415,7 +447,7 @@ def get_places_with_years_from_response(response, silent=True, return_type = "li
     - str: String representation of the places with years
     """
     places = []
-    for place in response["work_locations"]:
+    for place in response["location_dates"]:
         years = get_years_from_response_location(place, silent=silent)
         if years != []:
             min_year = min(years); max_year = max(years)
@@ -837,7 +869,7 @@ def get_all_person_info(person_name, endpoint_url="https://query.wikidata.org/sp
                     'gender': None,
                     'citizenship': None,
                     'occupation': [],
-                    'work_locations': [],
+                    'location_dates': [],
                 }
                 for result in results:
                     if not person_info['birth_place']:
@@ -857,16 +889,16 @@ def get_all_person_info(person_name, endpoint_url="https://query.wikidata.org/sp
                     if occupation and occupation not in person_info['occupation']:
                         person_info['occupation'].append(occupation)
                     
-                    work_location = result.get('workLocationLabel', {}).get('value', None)
-                    if work_location:
+                    location = result.get('workLocationLabel', {}).get('value', None)
+                    if location:
                         location_info = {
-                            'location': work_location,
+                            'location': location,
                             'start_time': result.get('startTime', {}).get('value', None),
                             'end_time': result.get('endTime', {}).get('value', None),
                             'point_in_time': result.get('pointInTime', {}).get('value', None),
                         }
-                        if location_info not in person_info['work_locations']:
-                            person_info['work_locations'].append(location_info)
+                        if location_info not in person_info['location_dates']:
+                            person_info['location_dates'].append(location_info)
                 return person_info
             break #Don't need to try again, we have the data
         else: #Some status codes are handled,it's fine now
@@ -1327,7 +1359,7 @@ def get_person_locations(person_name, endpoint_url="https://query.wikidata.org/s
                     'name': person_name,
                     'birth_place': results[0].get('placeOfBirthLabel', {}).get('value', None),
                     'death_place': results[0].get('placeOfDeathLabel', {}).get('value', None),
-                    'work_locations': [],
+                    'location_dates': [],
                 }
                 for result in results:
                     work_location = result.get('workLocationLabel', {}).get('value', None)
@@ -1338,8 +1370,8 @@ def get_person_locations(person_name, endpoint_url="https://query.wikidata.org/s
                             'end_time': result.get('endTime', {}).get('value', None),
                             'point_in_time': result.get('pointInTime', {}).get('value', None),
                         }
-                        if location_info not in person_info['work_locations']:
-                            person_info['work_locations'].append(location_info)
+                        if location_info not in person_info['location_dates']:
+                            person_info['location_dates'].append(location_info)
                 return person_info
             break #Don't need to try again, we have the data
         else: #Some status codes are handled,it's fine now
@@ -1481,12 +1513,7 @@ def get_all_person_info_and_id(person_name, endpoint_url="https://query.wikidata
                 ids= [result['person']['value'].split('/')[-1] for result in results]
                 acceptable_ids = [i for i in ids if re.match(r'^Q\d+$', i)]
                 if acceptable_ids:
-                    id_counts = {i: ids.count(i) for i in acceptable_ids}
-                    most_common_id = max(id_counts, key=id_counts.get)
-                    if id_counts[ids[0]] == max(id_counts.values()):
-                        person_info['id'] = ids[0]
-                    else:
-                        person_info['id'] = most_common_id
+                    person_info['id'] = get_id_from_results(results)
                 else:
                     if not silent:
                         print(f"{person_name} has an invalid ID: {person_info['id']} (is not in the form Q12345..)")
@@ -1600,7 +1627,8 @@ def get_exhibitions_by_id(person_id, endpoint_url="https://query.wikidata.org/sp
         if response.status_code == 200: #Successful
             data = response.json()
             results = data.get('results', {}).get('bindings', [])
-            print('Results 0:', results[0])
+            if not silent:
+                print('Results 0:', results[0])
             if results:
                 collections = [result.get('collectionLabel', {}).get('value', None) for result in results if 'collectionLabel' in result]
                 return collections
