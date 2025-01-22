@@ -10,7 +10,7 @@ Common inputs:
     people (list of str): List of people's names.
     person_id (str): Wikidata ID of the person.
     retries (int): Maximum number of retries, in case of a status code error.
-    delay, delay0, delay1, delay2 (int): Delay times for retries.
+    delay or delays (int|list of int): Delay time(s) for retries.
     endpoint_url (str): the URL of the (SPARQL) endpoint, should be "https://query.wikidata.org/sparql".
     silent (bool): Whether to print out errors or not.
 
@@ -36,6 +36,10 @@ def sparql_query(query,  retries=3, delay=10):
     Returns:
     - dict or None: The JSON response of the query if successful, None otherwise.
     """
+    if type(delay)==int:
+        delay = [delay]*retries
+    elif type(delay)!=list:
+        raise ValueError("Delay should be an integer or a list of integers.")
     endpoint_url="https://query.wikidata.org/sparql"
     for attempt in range(retries):
         try:
@@ -51,7 +55,7 @@ def sparql_query(query,  retries=3, delay=10):
             print(f"Error fetching data, status code: {response.status_code}.")
             if response.status_code in [429, 500, 502, 503, 504]:
                 print(f"Attempt {attempt + 1} of {retries}.")
-                time.sleep(delay)
+                time.sleep(delay[attempt])
             else:
                 print(f"Not retrying status code {response.status_code}.")
                 break
@@ -100,7 +104,7 @@ def sparql_query_by_dict(variable_names, WHERE_dict, multiple_people_list = None
     return sparql_query(query, retries, delay)
 
 
-def sparql_query_retry_after(query,  retries=3):
+def sparql_query_retry_after(query,  retries=3, original_delay = 1):
     """
     Make a SPARQL query API call to the Wikidata endpoint with retry-after handling.
 
@@ -121,11 +125,14 @@ def sparql_query_retry_after(query,  retries=3):
             print(f"Error fetching data, status code: {response.status_code}.")
             if response.status_code in [429, 500, 502, 503, 504]:
                 print(f"Attempt {attempt + 1} of {retries}.")
-                delay = 1
+                original_delay = 1
                 if response.status_code == 429:
                     retry_after = response.headers.get('Retry-After')
+                    print(f"Retry-After: {retry_after}")
                     if retry_after:
                         delay = int(retry_after)
+                    else:
+                        delay = original_delay
                 time.sleep(delay)
             else:
                 print(f"Not retrying status code {response.status_code}.")
@@ -513,7 +520,7 @@ def results_dataframe(all_people_info: list | dict):
 
 ####################################### Queries for multiple instances (people) #######################################
 
-def get_multiple_people_all_info(people, retries=3, delay=60):
+def get_multiple_people_all_info(people, retries=3, delays=[1, 10, 60]):
     """
     NOTE: Querying multiple people at once is faster than querying them separately, however might miss some instances.
     Definitely consider using 'get_multiple_people_all_info_fast_retry_missing' which runs this function and tries again for missing instances.
@@ -521,7 +528,7 @@ def get_multiple_people_all_info(people, retries=3, delay=60):
     Get all information about multiple people from Wikidata, in one query per chunk (150 instances).
 
     Parameters:
-    - people, retries, delay: See at the top of the file.
+    - people, retries, delays: See at the top of the file.
 
     Returns:
     - list: List of dictionaries for each person.
@@ -553,7 +560,7 @@ def get_multiple_people_all_info(people, retries=3, delay=60):
           SERVICE wikibase:label {{ bd:serviceParam wikibase:language "en". }}
         }}
         '''
-        response_json = sparql_query(query, retries, delay)
+        response_json = sparql_query(query, retries, delays)
         results = response_json.get('results', {}).get('bindings', [])
         for person_name in chunk:
             person_results = [r for r in results if r.get('personLabel', {}).get('value') == person_name]
@@ -564,7 +571,7 @@ def get_multiple_people_all_info(people, retries=3, delay=60):
     return all_people_info
 
 
-def get_multiple_people_all_info_fast_retry_missing(people, retries=3, delay=60):
+def get_multiple_people_all_info_fast_retry_missing(people, retries=3, delays=[1,10,60]):
     """
     Quickly query multiple people at once, then retry for missing instances separately.
     Basically, running 'get_multiple_people_all_info' first, then 'get_all_person_info_strict' for each missing instance separately.
@@ -576,7 +583,7 @@ def get_multiple_people_all_info_fast_retry_missing(people, retries=3, delay=60)
     Returns:
     - list: List of dictionaries for each person.
     """
-    gathered_people_parallel = get_multiple_people_all_info(people, retries, delay)
+    gathered_people_parallel = get_multiple_people_all_info(people, retries, delays)
     collected_names = [gathered_people_parallel[k]['name'] for k in range(len(gathered_people_parallel))]
     missing_people = [p for p in people if p not in collected_names]
 
@@ -634,13 +641,13 @@ def get_multiple_people_all_info_separate_responses(people, retries=3, delay=60)
     return responses
 
 
-def get_multiple_people_wikidata_ids(people, retries=3, delay0=1, delay1=20, delay2=60, return_counts=False, return_extended=False, return_most_common=False):
+def get_multiple_people_wikidata_ids(people, retries=3, delays = [1, 10, 60], return_counts=False, return_extended=False, return_most_common=False):
     """
     Retrieve (only) Wikidata IDs for multiple people.
     This is useful to further query information afterwards, using the IDs (which get faster responses).
 
     Parameters:
-    - people, retries, delay0, delay1, delay2: See at the top of the file.
+    - people, retries, delays: See at the top of the file.
     - return_counts (bool): Whether to return the counts of response results for each person.
     - return_extended (bool): Whether to return the extended results (all IDs) for each person, or just the last one, or...
     - return_most_common (bool): Return the most common ID gathered for each person.
@@ -693,12 +700,7 @@ def get_multiple_people_wikidata_ids(people, retries=3, delay0=1, delay1=20, del
                                     break
                 break
             elif response.status_code in [408, 429, 500, 502, 503, 504]:
-                if attempt == 0:
-                    time.sleep(delay0)
-                elif attempt == 1:
-                    time.sleep(delay1)
-                elif attempt == 2:
-                    time.sleep(delay2)
+                time.sleep(delays[attempt])
             elif response.status_code in [400, 404]:
                 print(f"Error: {response.status_code}")
                 break
@@ -726,17 +728,17 @@ def get_multiple_people_wikidata_ids(people, retries=3, delay0=1, delay1=20, del
         return all_wikidata_ids
 
 
-def get_multiple_people_wikidata_ids_retry_missing(people, retries=3, delay0=1, delay1=20, delay2=60):
+def get_multiple_people_wikidata_ids_retry_missing(people, retries=3, delays = [1, 10, 60]):
     """
     Gather Wikidata IDs for multiple people in one query, then retry missing instances with separate queries.
 
     Parameters:
-    - people, retries, delay0, delay1, delay2: See at the top of the file.
+    - people, retries, delays: See at the top of the file.
 
     Returns:
     - dict: Dictionary of person names and their Wikidata IDs.
     """
-    gathered_ids_parallel = get_multiple_people_wikidata_ids(people, retries, delay0, delay1, delay2, return_counts=False, return_extended=False, return_most_common=True)
+    gathered_ids_parallel = get_multiple_people_wikidata_ids(people, retries, delays, return_counts=False, return_extended=False, return_most_common=True)
     collected_names = list(gathered_ids_parallel.keys())
     missing_people = [p for p in people if p not in collected_names]
 
@@ -830,13 +832,13 @@ def get_multiple_people_all_info_by_id_fast_retry_missing(people_ids, retries=3,
 ####################################### Queries for 1 person #######################################
 #(SPARQL queries). Exhibitions: see below at "queries by Wikidata ID"
 
-def get_all_person_info(person_name, endpoint_url="https://query.wikidata.org/sparql", retries=3, delay0=1, delay1=20, delay2=60):
+def get_all_person_info(person_name, endpoint_url="https://query.wikidata.org/sparql", retries=3, delays = [1, 10, 60]):
     """
     Default function to get all sorts of information about a person from Wikidata.
     This includes the person's name, birth place, birth date, death date, gender, citizenship, occupation, work locations (with time data).
 
     Parameters:
-    - person_name, endpoint_url, retries, delay0, delay1, delay2: See at the top of the file.
+    - person_name, endpoint_url, retries, delays: See at the top of the file.
 
     Returns:
     - dict or None: Data dictionary about the person if successful, None otherwise.
@@ -914,20 +916,14 @@ def get_all_person_info(person_name, endpoint_url="https://query.wikidata.org/sp
             print(f"Error fetching data for {person_name}, status code: {response.status_code}.")
             if response.status_code in [429, 500, 502, 503, 504]:
                 print(f"Attempt {attempt + 1} of {retries}.")
-                
-                if attempt == 0:
-                    time.sleep(delay0)
-                elif attempt == 1:
-                    time.sleep(delay1)
-                elif attempt == 2:
-                    time.sleep(delay2)
+                time.sleep(delays[attempt])
             else:
                 break
 
     return None
 
 
-def get_all_person_info_strict(person_name, endpoint_url="https://query.wikidata.org/sparql", retries=3, delay0=1, delay1=20, delay2=60, silent = True):
+def get_all_person_info_strict(person_name, endpoint_url="https://query.wikidata.org/sparql", retries=3, delays=[1, 10, 60], silent = True):
     """
     An improved version of get_all_person_info.
     Basically, same as get_all_person_info but restricts to just human instances
@@ -935,7 +931,7 @@ def get_all_person_info_strict(person_name, endpoint_url="https://query.wikidata
     Would be for every language, but that also excludes person alias cases.
 
     Parameters:
-    - person_name, endpoint_url, retries, delay0, delay1, delay2, silent: See at the top of the file.
+    - person_name, endpoint_url, retries, delays, silent: See at the top of the file.
 
     Returns:
     - dict or None: Data dictionary about the person if successful, None otherwise.
@@ -987,20 +983,14 @@ def get_all_person_info_strict(person_name, endpoint_url="https://query.wikidata
             if response.status_code in [429, 500, 502, 503, 504]:
                 if not silent:
                     print(f"Attempt {attempt + 1} of {retries}.")
-                
-                if attempt == 0:
-                    time.sleep(delay0)
-                elif attempt == 1:
-                    time.sleep(delay1)
-                elif attempt == 2:
-                    time.sleep(delay2)
+                time.sleep(delays[attempt])
             else:
                 break
 
     return None
 
 
-def get_person_all_info_different_languages(person_name, endpoint_url="https://query.wikidata.org/sparql", retries=3, delay0=1, delay1=20, delay2=60, silent = True):
+def get_person_all_info_different_languages(person_name, endpoint_url="https://query.wikidata.org/sparql", retries=3, delays=[1,10,60], silent = True):
     #Change in the query: language can be anything. Drawback: doesn't detect aliases
     """
     TODO: Needs some redesign: gather all results in a list as get_all_person_info_strict (e.g. occupation)
@@ -1008,7 +998,7 @@ def get_person_all_info_different_languages(person_name, endpoint_url="https://q
     The drawback is that that person_name string must match the name in the database, so aliases are not detected.
     
     Parameters:
-    - person_name, endpoint_url, retries, delay0, delay1, delay2, silent: See at the top of the file.
+    - person_name, endpoint_url, retries, delays, silent: See at the top of the file.
     
     Returns:
     - dict or None: Data dictionary about the person if successful, None otherwise
@@ -1070,13 +1060,7 @@ def get_person_all_info_different_languages(person_name, endpoint_url="https://q
             if response.status_code in [429, 500, 502, 503, 504]:
                 if not silent:
                     print(f"Attempt {attempt + 1} of {retries}.")
-                
-                if attempt == 0:
-                    time.sleep(delay0)
-                elif attempt == 1:
-                    time.sleep(delay1)
-                elif attempt == 2:
-                    time.sleep(delay2)
+                time.sleep(delays[attempt])
             else:
                 break
 
@@ -1271,12 +1255,12 @@ def get_person_wikidata_name(person_name, retries = 3, delay = 1):
     return None
 
 
-def get_person_wikidata_name_fast(person_name, retries = 3, delay0 = 1,delay1=20, delay2 = 60):
+def get_person_wikidata_name_fast(person_name, retries = 3, delays=[1, 10, 60]):
     """
     Get the Wikidata database name of a person by their (alias) name.
 
     Parameters:
-    - person_name, retries, delay0, delay1, delay2: See at the top of the file.
+    - person_name, retries, delays: See at the top of the file.
 
     Returns:
     - str or None: Wikidata name of the person if successful, None otherwise.
@@ -1305,14 +1289,7 @@ def get_person_wikidata_name_fast(person_name, retries = 3, delay0 = 1,delay1=20
             else:
                 return None
         elif response.status_code in [408, 429, 500, 502, 503, 504]:
-            
-            if attempt == 0:
-                time.sleep(delay0)
-            elif attempt == 1:
-                time.sleep(delay1)
-            elif attempt == 2:
-                time.sleep(delay2)
-            
+            time.sleep(delays[attempt])
         elif response.status_code in [400, 404]:
             print("Error: %s"%response.status_code, "person name: ", person_name)
             return None
@@ -1394,12 +1371,12 @@ def get_person_locations(person_name, endpoint_url="https://query.wikidata.org/s
     return None
 
 ######## Queries with or by Wikidata ID ########
-def get_person_wikidata_id(person_name, retries = 3, delay0 = 1, delay1=20, delay2=60):
+def get_person_wikidata_id(person_name, retries = 3, delays = [1, 10, 60]):
     """
     Get the Wikidata ID of a person by their name.
     
     Parameters:
-    - person_name, retries, delay0, delay1, delay2: See at the top of the file.
+    - person_name, retries, delays: See at the top of the file.
     
     Returns:
     - str or None: Wikidata ID (starting with a Q) of the person if successful, None otherwise"""
@@ -1425,23 +1402,19 @@ def get_person_wikidata_id(person_name, retries = 3, delay0 = 1, delay1=20, dela
                         wikidata_id = person.split('/')[-1] # Extract Wikidata ID from URL
                         return wikidata_id
         elif response.status_code in [408, 429, 500, 502, 503, 504]:
-            if attempt == 0:
-                time.sleep(delay0)
-            elif attempt == 1:
-                time.sleep(delay1)
-            elif attempt == 2:
-                time.sleep(delay2)
+            time.sleep(delays[attempt])
         elif response.status_code in [400, 404]:
             print("Error: %s"%response.status_code)
             return None
     return None
 
-def get_person_wikidata_id_different_languages(person_name, retries = 3, delay0 = 1, delay1=20, delay2=60):
+
+def get_person_wikidata_id_different_languages(person_name, retries = 3, delays = [1, 10, 60]):
     """
     Get the Wikidata ID of a person by their name.
     
     Parameters:
-    - person_name, retries, delay0, delay1, delay2: See at the top of the file.
+    - person_name, retries, delays: See at the top of the file.
     
     Returns:
     - str or None: Wikidata ID (starting with a Q) of the person if successful, None otherwise"""
@@ -1467,24 +1440,19 @@ def get_person_wikidata_id_different_languages(person_name, retries = 3, delay0 
                         wikidata_id = person.split('/')[-1] # Extract Wikidata ID from URL
                         return wikidata_id
         elif response.status_code in [408, 429, 500, 502, 503, 504]:
-            if attempt == 0:
-                time.sleep(delay0)
-            elif attempt == 1:
-                time.sleep(delay1)
-            elif attempt == 2:
-                time.sleep(delay2)
+            time.sleep(delays[attempt])
         elif response.status_code in [400, 404]:
             print("Error: %s"%response.status_code)
             return None
     return None
 
 
-def get_all_person_info_and_id(person_name, endpoint_url="https://query.wikidata.org/sparql", retries=3, delay0=1, delay1=20, delay2=60, silent = True):
+def get_all_person_info_and_id(person_name, endpoint_url="https://query.wikidata.org/sparql", retries=3, delays = [1, 10, 60], silent = True):
     """
     Get all information about a person from Wikidata, and including their ID.
 
     Parameters:
-    - person_name, endpoint_url, retries, delay0, delay1, delay2, silent: See at the top of the file.
+    - person_name, endpoint_url, retries, delays, silent: See at the top of the file.
 
     Returns:
     - dict or None: Data dictionary about the person if successful, None otherwise.
@@ -1535,26 +1503,20 @@ def get_all_person_info_and_id(person_name, endpoint_url="https://query.wikidata
             if response.status_code in [429, 500, 502, 503, 504]:
                 if not silent:
                     print(f"Attempt {attempt + 1} of {retries}.")
-                
-                if attempt == 0:
-                    time.sleep(delay0)
-                elif attempt == 1:
-                    time.sleep(delay1)
-                elif attempt == 2:
-                    time.sleep(delay2)
+                time.sleep(delays[attempt])
             else:
                 break
 
     return None
 
 
-def get_all_person_info_by_id(person_id, endpoint_url="https://query.wikidata.org/sparql", retries=3, delay0=1, delay1=20, delay2=60, silent = True):
+def get_all_person_info_by_id(person_id, endpoint_url="https://query.wikidata.org/sparql", retries=3, delays=[1,10,60], silent = True):
     """
     NOTE: Exhibitions are excluded currently, as they are too slow for some artists (e.g. Rubens).
     Get all information about a person from Wikidata, using their Wikidata ID.
     
     Parameters:
-    - person_id, endpoint_url, retries, delay0, delay1, delay2, silent: See at the top of the file.
+    - person_id, endpoint_url, retries, delays, silent: See at the top of the file.
     
     Returns:
     - dict or None: Data dictionary about the person if successful, None otherwise.
@@ -1600,24 +1562,19 @@ def get_all_person_info_by_id(person_id, endpoint_url="https://query.wikidata.or
             if response.status_code in [429, 500, 502, 503, 504]:
                 if not silent:
                     print(f"Attempt {attempt + 1} of {retries}.")
-                if attempt == 0:
-                    time.sleep(delay0)
-                elif attempt == 1:
-                    time.sleep(delay1)
-                elif attempt == 2:
-                    time.sleep(delay2)
+                time.sleep(delays[attempt])
             else:
                 break
 
     return None
 
 
-def get_exhibitions_by_id(person_id, endpoint_url="https://query.wikidata.org/sparql", retries=3, delay0=1, delay1=20, delay2=60, silent = True):
+def get_exhibitions_by_id(person_id, endpoint_url="https://query.wikidata.org/sparql", retries=3, delays=[1, 10, 60], silent = True):
     """
     Get exhibitions of a person from Wikidata, using their Wikidata ID.
 
     Parameters:
-    - person_id, endpoint_url, retries, delay0, delay1, delay2, silent: See at the top of the file.
+    - person_id, endpoint_url, retries, delays, silent: See at the top of the file.
 
     Returns:
     - list or None: List of exhibitions of the person if successful, None otherwise.
@@ -1648,19 +1605,14 @@ def get_exhibitions_by_id(person_id, endpoint_url="https://query.wikidata.org/sp
             if response.status_code in [429, 500, 502, 503, 504]:
                 if not silent:
                     print(f"Attempt {attempt + 1} of {retries}.")
-                if attempt == 0:
-                    time.sleep(delay0)
-                elif attempt == 1:
-                    time.sleep(delay1)
-                elif attempt == 2:
-                    time.sleep(delay2)
+                time.sleep(delays[attempt])
             else:
                 break
 
     return None
 
 
-def get_all_person_info_and_exhibitions_by_id(person_id, endpoint_url="https://query.wikidata.org/sparql", retries=3, delay0=1, delay1=20, delay2=60, silent = True):
+def get_all_person_info_and_exhibitions_by_id(person_id, endpoint_url="https://query.wikidata.org/sparql", retries=3, delays = [1, 10, 60], silent = True):
     #This may be too slow for some artists, e.g. Rubens, therefore we get an error (query 1 minute timeout)
     """
     NOTE: This may be too slow for some artists, e.g. Rubens, for whom we can get a timeout error.
@@ -1669,7 +1621,7 @@ def get_all_person_info_and_exhibitions_by_id(person_id, endpoint_url="https://q
     Get all information about a person from Wikidata, using their Wikidata ID, including exhibitions.
 
     Parameters:
-    - person_id, endpoint_url, retries, delay0, delay1, delay2, silent: See at the top of the file.
+    - person_id, endpoint_url, retries, delays, silent: See at the top of the file.
 
     Returns:
     - dict or None: Data dictionary about the person if successful, None otherwise.
@@ -1717,12 +1669,7 @@ def get_all_person_info_and_exhibitions_by_id(person_id, endpoint_url="https://q
             if response.status_code in [429, 500, 502, 503, 504]:
                 if not silent:
                     print(f"Attempt {attempt + 1} of {retries}.")
-                if attempt == 0:
-                    time.sleep(delay0)
-                elif attempt == 1:
-                    time.sleep(delay1)
-                elif attempt == 2:
-                    time.sleep(delay2)
+                time.sleep(delays[attempt])
             else:
                 break
 
