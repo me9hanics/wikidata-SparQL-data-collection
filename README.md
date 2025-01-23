@@ -1,32 +1,35 @@
-# SparQL Wikidata data collection from Wikipedia profiles 
-A file with functions to help fetch various data of personalities (and other entities) from Wikidata, and a notebook showing how to use them.<br>
+# Wikidata SparQL API wrapper: Data collection from Wikipedia profiles 
+A file with functions to help fetch various data of personalities (and other entities) from Wikidata, and a tutorial notebook showing how to use the methods.<br>
 
 This repository was used to collect data of over 10000 painters for the projects [PainterPalette dataset](https://github.com/me9hanics/PainterPalette) and [ArtProject](https://github.com/me9hanics/ArtProject). (In contrast, WikiArt only contains painting data of 3000 painters.)
 
 ## How to use?
 
+There are NO! non-standard dependencies for this module, all used libraries are part of the Python standard library. There is one optional exception: you need to install pandas if you want to use the `results_dataframe` function.
+
 - Just download the ```functions.py``` file.
   
 - To try examples, you can check the `examples.ipynb` Jupyter Notebook too.
  
-All functions are stored in the ```functions.py``` file, which after downloading you can easily import in any Python/Jupyter Notebook file in the same folder, with `import functions`.
+All methods are stored in the self-sufficient ```functions.py``` file, which you can easily place in your work folder and import in any Python/Jupyter Notebook with `import functions`.
 
 ### Gather data of someone (van Gogh) from Wikidata
 
-Use the ```get_all_person_info_strict``` or the ```get_all_person_info``` function (preferably the first - to not collect statue or other nonhuman instances - other options are *get_person_info* and *get_person_locations*, these include less information, or you can write your SparQL query if you want to gather some other property not included among these (read [this part](https://github.com/me9hanics/wikidata-SparQL-data-collection?tab=readme-ov-file#more-complex-example))).
+Use the ```get_all_person_info_strict``` or the ```get_all_person_info``` function (preferably the first - to not collect statue or other nonhuman instances - other options are *get_person_locations* or *get_exhibitions_by_id* which include less information). You can also write your own SparQL query if you want to gather other properties not included among these, the module has support for that. (Read [this section](https://github.com/me9hanics/wikidata-SparQL-data-collection?tab=readme-ov-file#sparql-queries-tutorial-for-other-attributes) if you want to know how to write your own queries).
 
+Using the `get_all_person_info_strict` function for van Gogh:
 
 ```python
 import functions as f
 
-van_gogh_response = f.get_all_person_info_strict("Van Gogh")
+van_gogh_response = f.get_all_person_info_strict("Vincent van Gogh")
 van_gogh_response
 ```
 
 The returned response, in dictionary (JSON) format:
 
 ```
-    {'name': 'Van Gogh',
+    {'name': 'Vincent van Gogh',
      'birth_place': 'Zundert',
      'birth_date': '1853-03-30T00:00:00Z',
      'death_date': '1890-07-29T00:00:00Z',
@@ -105,7 +108,7 @@ for place in places_list:
     Maison Van Gogh, between 1879-1880
     
 
-<br>We could also get all this information by writing our SparQL query. Let's see an example of a SparQL query, which we can run with the `sparql_query` function:
+<br>We can get all this information by writing SparQL queries, which is what the library does under the hood. Let's see an example of a SparQL query, which we can run with the `sparql_query` function:
   
   ```sparql
     person_name = "Vincent van Gogh"
@@ -133,7 +136,7 @@ What does each part do?
 The ```SELECT``` row declaring the variables with names (with questionmarks in front) and only the ones that will be returned in the response (see how ?occupation is not included, but ?occupationLabel is). Some variables get a "Label" suffix, they represent the human-readable representative name of the person, whereas the "original" variable stores the identifier (like "Budapest" is the label and "Q1781" is its identifier). The ```SERVICE``` line helps to put these values in the Label variables, only having to include this line instead of a line for every label, this is a special feature by Wikidata. This is described [here](https://en.wikibooks.org/wiki/SPARQL/SERVICE_-_Label) well, at the "Automatic Label SERVICE": *If an unbound variable in SELECT is named ?NAMELabel, then WDQS produces the label (rdfs:label) for the entity in variable ?NAME.*<br>
 The ```WHERE``` describes what each non-label variable shall equal. Adding the ```OPTIONAL``` keyword makes the variable just supplementary, the query will still return a response if its not found.<br>
 The ```?person ?label "%s"@en.``` gives the ?personLabel variable the name of the person. "%s" (like in C and C++) is a placeholder for a string, the string being ```person_name.replace('"', '\"')```, which basically just puts the name of the painter defined before, which is "Vincent van Gogh", and with the ```replace('"', '\"')``` functionality we put a "\" character before the quotation marks, to [escape these characters](https://en.wikipedia.org/wiki/Escape_sequence).<br> 
-The ```?person wdt:P19 ?placeOfBirth.``` line and others tell which Wikidata item (entity) should the variable take as value. Here, it is a property, as represented by the "P", and P19 is the "place of birth" property of a profile. The "wdt" keyword stands for Wikidata "truthy", which basically points to a the properties-containing sub-URL. This substitutes the following SparQL code: ```PREFIX wdt: <http://www.wikidata.org/prop/direct/>```. For most common cases, this is used, or the general "wd" keyword for specific items. Here is an example for it:
+The ```?person wdt:P19 ?placeOfBirth.``` line and others tell which Wikidata item (entity) should the variable take as value. Here, it is a property, as represented by the "P", and P19 is the "place of birth" property of a profile. The "wdt" keyword stands for Wikidata "truthy", which basically points to a the properties-containing sub-URL. This substitutes the following SparQL code: ```PREFIX wdt: <http://www.wikidata.org/prop/direct/>```. For most common cases, this is used, or the general "wd" keyword for specific items. Here is an example:
 
   ```sparql
 
@@ -155,14 +158,14 @@ Just use the `results_dataframe` function.
 ```python
 names = ["Bracha L. Ettinger", "M.F. Husain", "Henri Matisse"]
 responses = f.get_multiple_people_all_info_fast_retry_missing(example_names)
-df = f.results_dataframe(responses)
+df = f.results_dataframe(responses) #install pandas!
 
 df
 ```
 
 | name              | birth_place        | birth_date           | death_date           | death_place | gender | citizenship | occupation                                                                 | work_locations                                                                 | id      |
 |-------------------|--------------------|----------------------|----------------------|-------------|--------|-------------|----------------------------------------------------------------------------|--------------------------------------------------------------------------------|---------|
-| Henri Matisse     | Le Cateau-Cambrésis| 1869-12-31T00:00:00Z | 1954-11-03T00:00:00Z | Nice        | male   | France      | [lithographer, drawer, printmaker, ceramicist, painter, sculptor]         | [{'location': 'New York City', 'start_time': None, 'end_time': None}]          | NaN     |
+| Henri Matisse     | Le Cateau-Cambrésis| 1869-12-31T00:00:00Z | 1954-11-03T00:00:00Z | Nice        | male   | France      | [lithographer, drawer, printmaker, ceramicist, painter, sculptor]         | [{'location': 'New York City', 'start_time': None, 'end_time': None}]          | Q5589     |
 | Bracha L. Ettinger| Tel Aviv           | 1948-03-23T00:00:00Z | None                 | None        | female | Israel      | [philosopher, psychoanalyst, painter, photographer, artist]               | []                                                                             | Q516614 |
 | M.F. Husain       | Pandharpur         | 1915-09-17T00:00:00Z | 2011-06-09T00:00:00Z | London      | male   | Qatar       | [film producer, film director, painter, artist, photographer, sculptor]   | [{'location': 'India', 'start_time': None, 'end_time': None}]                  | Q558522 |
 
