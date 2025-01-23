@@ -4,8 +4,11 @@ import urllib3
 import re
 
 """
-Functions to query Wikidata using the SPARQL API and process the results.
+Module with functions to query Wikidata using the SPARQL API and process the results.
 Particularly, functions to query information about (multiple) people, such as their birth dates, locations, etc.
+
+There are NO! dependencies (other than the standard library) for this module, with
+    the exception of the 'pandas' library if you intend to use the 'results_dataframe' function.
 Created by: Mihaly Hanics, 2024
 
 Common inputs:
@@ -51,7 +54,7 @@ def sparql_query(query,  retries=3, delay=10, endpoint_url="https://query.wikida
             response = requests.get(endpoint_url, params={'query': query, 'format': 'json'})
         except urllib3.exceptions.ProtocolError as e:
             print("Likely what happened: ProtocolError: ('Connection aborted.', RemoteDisconnected('Remote end closed connection without response'))")
-            print("Probably too big query, try using the chunked query function instead")
+            print("Probably too big query (typically happens when querying exhibitions for many artists), try using chunks in querying instead (e.g. get_multiple_people_all_info_retry_missing).")
             break
 
         if response.status_code == 200: #Successful
@@ -67,32 +70,47 @@ def sparql_query(query,  retries=3, delay=10, endpoint_url="https://query.wikida
     return None
 
 
-def sparql_query_by_dict(variable_names, WHERE_dict, multiple_people_list = None, multiple_people_var_name = "person", language_param = "[AUTO_LANGUAGE],en" , retries=3, delay=10):
+def sparql_query_by_dict(variable_names, WHERE_clause_matches, multiple_people_list = None, multiple_people_var_name = "person",
+                         after_where="", label_language = False, label_language_param = "[AUTO_LANGUAGE],en" , run = True,
+                         retries=3, delays=[1, 10, 60]):
     """
     Make a SPARQL query using a dictionary to construct the WHERE clause.
 
     Parameters:
     - variable_names (list of str): List of variable names to select.
-    - WHERE_dict (dict): Dictionary where keys are variable names and values are conditions.
-            Example: WHERE_dict = {'painter': "wdt:P31 wd:Q5;", 'occupation': "wdt:P106 ?occupation." ... }
+    - WHERE_clause_matches (str|dict|NoneType): Dictionary where keys are variable names and values are conditions.
+            Example: WHERE_clause_matches = {'?painter': "wdt:P31 wd:Q5;", '?person': "wdt:P106 ?occupation." ... }
     - multiple_people_list (list of str or None): If querying multiple people, list of names to query for. 
             If None, include the only person in the WHERE clause.
     - multiple_people_variable_name (str or None): If querying multiple people, the name of the variable corresponding to values.
             A typical example: if "person", the WHERE clause will start with "VALUES ?personLabel { {multiple_people_list} }", followed up with "?person ?label ?personLabel."
             Do not forget to include the corresponding SELECT variable in variable_names.
-    - language_param (str): The language label in the service parameter.
+    - after_where (str): Extra part to add to the query, after the WHERE clause (except service for label language).
+            Could be ordering, etc. Example: "ORDER BY ?dateOfBirth"
+    - label_language (bool): Whether to include a service parameter with the language label.
+            Often handy, but this service is only for label language.
+    - label_language_param (str): The language label in the service parameter.
             Usually "[AUTO_LANGUAGE],en" or "en".
     - retries, delay: See at the top of the file.
 
     Returns:
     - dict or None: The JSON response of the query if successful, None otherwise.
     """
-    #Example dict: {'painter': "wdt:P31 wd:Q5;", ... }
+    if type(variable_names) != list:
+        variable_names = [variable_names]
+    if type(WHERE_clause_matches) == dict:
+        print(WHERE_clause_matches)
+        WHERE_clause_matches = '\n'.join([f"{variable} {value} ." for variable, value in WHERE_clause_matches.items()])
+        print("\n",WHERE_clause_matches)
+    if type(WHERE_clause_matches) == type(None):
+        WHERE_clause_matches = ""
+
     select = "SELECT " + " ".join([f"?{name}" for name in variable_names])
     where = " WHERE {\n"
 
     if type(multiple_people_list) == list:
         """
+        Something resembling this:
         VALUES ?personLabel { "Vincent van Gogh" "Pablo Picasso" }
         ?person ?label ?personLabel.
         """
@@ -100,15 +118,22 @@ def sparql_query_by_dict(variable_names, WHERE_dict, multiple_people_list = None
         where += f'VALUES ?{multiple_people_var_name}Label {{ {people_string} }}\n'
         where += f"?{multiple_people_var_name} ?label ?{multiple_people_var_name}Label.\n"
 
-    for variable, value in WHERE_dict.items():
-        where += f"?{variable} {value}\n"
-    service = '\nSERVICE wikibase:label { bd:serviceParam wikibase:language "' + language_param + '". }\n}' #Watch out for quotation marks
+    where += WHERE_clause_matches + "\n"
+    if label_language:
+        where += '\nSERVICE wikibase:label { bd:serviceParam wikibase:language "' + label_language_param + '". }' #Watch out for quotation marks
+    where += "\n}"
     
-    query = select + where + service
-    return sparql_query(query, retries, delay)
+    extra = ''
+    if after_where:
+        extra += after_where
+
+    query = select + where + extra
+    if run:
+        return sparql_query(query, retries, delays)
+    return query
 
 
-def get_query_from_input(person, placeofbirth = True, dateofbirth = True, dateofdeath = True, placeofdeath = True, worklocation=True, gender=True, citizenship=True, occupation=True):
+def construct_person_query(person, **kwargs):
     """
     Construct a SPARQL query based on the given parameters.
 
@@ -119,48 +144,82 @@ def get_query_from_input(person, placeofbirth = True, dateofbirth = True, dateof
     Returns:
     - str: The constructed SPARQL query.
     """
+    properties = {'placeofbirth':'P19','dateofbirth':'P569',
+                  'dateofdeath':'P570','placeofdeath':'P20',
+                  'gender':'P21','citizenship':'P27',
+                  'occupation':'P106','worklocation':'P937'}
+    
     query = "SELECT ?person ?personLabel"
-    if placeofbirth:
-        query += " ?placeOfBirthLabel"
-    if dateofbirth:
-        query += " ?dateOfBirth"
-    if dateofdeath:
-        query += " ?dateOfDeath"
-    if placeofdeath:
-        query += " ?placeOfDeathLabel"
-    if gender:
-        query += " ?genderLabel"
-    if citizenship:
-        query += " ?citizenshipLabel"
-    if occupation:
-        query += " ?occupationLabel"
-    if worklocation: #Optional, need to be handled differently
-        query += " ?workLocationLabel ?startTime ?endTime ?pointInTime"
+    for property in properties.keys():
+        if kwargs.get(property, False):
+            keyword = property
+            if property not in ['placeofbirth', 'placeofdeath',]:
+                keyword += "Label"
+            query += f" ?{keyword}"
+            if property == "worklocation":
+                query += " ?startTime ?endTime ?pointInTime"
 
-    query += " WHERE {\n"
-    query += f'?person ?label "{person}"@en.\n'
-    if placeofbirth:
-        query += "OPTIONAL {?person wdt:P19 ?placeOfBirth. }\n"
-    if dateofbirth:
-        query += "OPTIONAL {?person wdt:P569 ?dateOfBirth. }\n"
-    if dateofdeath:
-        query += "OPTIONAL {?person wdt:P570 ?dateOfDeath. }\n"
-    if placeofdeath:
-        query += "OPTIONAL {?person wdt:P20 ?placeOfDeath. }\n"
-    if gender:
-        query += "OPTIONAL { ?person wdt:P21 ?gender. }\n"
-    if citizenship:
-        query += "OPTIONAL { ?person wdt:P27 ?citizenship. }\n"
-    if occupation:
-        query += "OPTIONAL { ?person wdt:P106 ?occupation. }\n"
-    if worklocation:
-        query += "OPTIONAL {\n?person p:P937 ?workStmt.\n?workStmt ps:P937 ?workLocation.\nOPTIONAL { ?workStmt pq:P580 ?startTime. }\nOPTIONAL { ?workStmt pq:P582 ?endTime. }\nOPTIONAL { ?workStmt pq:P585 ?pointInTime. }\n}\n"
+    query += " WHERE {\n" + f'?person ?label "{person}"@en.\n'
+
+    for property in properties.keys():
+        if kwargs.get(property, False):
+            if property == "worklocation":
+                query += f"OPTIONAL {{ ?person p:{properties[property]} ?workStmt.\n?workStmt ps:{properties[property]} ?workLocation.\n \
+                           OPTIONAL {{ ?workStmt pq:P580 ?startTime. }}\n \
+                           OPTIONAL {{ ?workStmt pq:P582 ?endTime. }}\n \
+                           OPTIONAL {{ ?workStmt pq:P585 ?pointInTime. }}\n}}\n"
+            else:
+                query += f"OPTIONAL {{ ?person wdt:{properties[property]} ?{property}. }}\n"
     query += "SERVICE wikibase:label { bd:serviceParam wikibase:language \"en\". }\n}"
     return query
 
 
-def get_entity_label(entity_id, retries=3, delay=10):
-    pass
+def get_entity_label(entity_id, retries=3, lang="all", delays=[1, 10, 60], **kwargs):
+    """
+    Get the label of an entity from Wikidata (typically a person's name).
+    
+    Parameters:
+    - entity_id (str): The Wikidata ID of the entity.
+    - lang (str): The language of the label (in the response). Can be:
+        - ISO 639-1 code (e.g. "en")
+        - "all" for getting all language responses
+        - "most" for selecting the most name among responses
+        - "threshold" for selecting above threshold given by linear_thresholding.
+    - retries, delays: See at the top of the file."""
+    if type(entity_id) != str:
+        try:
+            entity_id = str(entity_id)
+        except:
+            raise ValueError("Invalid entity_id (type).")
+    if not re.match(r'^Q\d+$', entity_id):
+        if re.match(r'\d+$', entity_id):
+            entity_id = "Q" + entity_id
+        else:
+            raise ValueError("Unknown entity_id format; try either Q1234.. or the number (1234..).")
+        
+    where = f'wd:{entity_id} rdfs:label ?label.'
+    if not lang in ["all", "most", "threshold"]:
+        where += f'FILTER(LANG(?label) = "{lang}").'
+    response_json = sparql_query_by_dict(["label"], where, label_language=False,
+                                         run=True, retries=retries, delays=delays)
+    if response_json:
+        results = response_json.get('results', {}).get('bindings', [])
+        if results:
+            if not lang in ["all", "most", "threshold"]:
+                if len(results) > 1:
+                    print(f"Multiple results for language {lang}; this is unexpected behaviour. \
+                          Returning the first one.")
+                return results[0].get('label', {}).get('value', None)
+            else:
+                labels = [result.get('label', {}).get('value', None) for result in results]
+                labels = [i for i in labels if i is not None]
+                if lang == "all":
+                    return labels
+                if lang == "most":
+                    return max(set(labels), key=labels.count)
+                if lang == "threshold":
+                    return above_threshold_counts(["label"], results, **kwargs)
+    return None
 
 ####################################### Utility functions #######################################
 
@@ -210,6 +269,8 @@ def most_common_results(keys, results):
     Returns:
     - list: The most common value for each key."""
     most_common_values = []
+    if type(keys) != list:
+        keys = [keys]
     for key in keys:
         counts = key_value_counts(key, results)
         most_common = max(counts, key=counts.get)
@@ -232,6 +293,8 @@ def above_threshold_counts(keys, results, threshold=0.4, baseline="max", **kwarg
     - baseline (str): The baseline for a float (ratio) threshold. Can be "max" or "total".
     """
     acceptable_values = []
+    if type(keys) != list:
+        keys = [keys]
     for key in keys:
         counts = key_value_counts(key, results)
         if isinstance(threshold, int):
@@ -652,33 +715,23 @@ def get_multiple_people_wikidata_ids(people, retries=3, delays = [1, 10, 60], re
         }}
         ''' #?person wdt:P31 wd:Q5. : Ensure instances of humans
 
-        for attempt in range(retries):
-            response = requests.get("https://query.wikidata.org/sparql", params={'query': query, 'format': 'json'})
-
-            if response.status_code == 200:
-                data = response.json()
-                results = data.get('results', {}).get('bindings', [])
-                for person_name in chunk:
-                    person_results = [r for r in results if r.get('personLabel', {}).get('value') == person_name]
-                    result_counts[person_name] = len(person_results)
-                    if person_results:
-                        if return_extended or return_most_common:
-                            extended_results[person_name] = [r.get('person', {}).get('value').split('/')[-1] for r in person_results if 'entity/Q' in r.get('person', {}).get('value')]
-                        else:
-                            for result in person_results:
-                                person = result.get('person', {}).get('value', None)
-                                if person and 'entity/Q' in person:
-                                    wikidata_id = person.split('/')[-1]
-                                    all_wikidata_ids[person_name] = wikidata_id
-                                    break
-                break
-            elif response.status_code in [408, 429, 500, 502, 503, 504]:
-                time.sleep(delays[attempt])
-            elif response.status_code in [400, 404]:
-                print(f"Error: {response.status_code}")
-                break
-            else:
-                print(f"Error: {response.status_code}, attempt {attempt + 1}/{retries}, chunk: {chunk}, response: {response.text}")
+        response_json = sparql_query(query, retries, delays)
+        if response_json:
+            results = response_json.get('results', {}).get('bindings', [])
+            for person_name in chunk:
+                person_results = [r for r in results if r.get('personLabel', {}).get('value') == person_name]
+                result_counts[person_name] = len(person_results)
+                if person_results:
+                    if return_extended or return_most_common:
+                        extended_results[person_name] = [r.get('person', {}).get('value').split('/')[-1]
+                                                         for r in person_results if 'entity/Q' in r.get('person', {}).get('value')]
+                    else:
+                        for result in person_results:
+                            person = result.get('person', {}).get('value', None)
+                            if person and 'entity/Q' in person:
+                                wikidata_id = person.split('/')[-1]
+                                all_wikidata_ids[person_name] = wikidata_id
+                                break
 
     if return_most_common:
         most_common_ids = {}
@@ -963,23 +1016,15 @@ def get_person_wikidata_name(person_name, retries = 3, delay = 1):
     '''% person_name.replace('"', '\"')
     # ?person wdt:P31 wd:Q5. : Ensure it's an instance of human, could happen that it's a statue of the person or something
 
-    for attempt in range(retries):
-        response = requests.get("https://query.wikidata.org/sparql", params={'query': query, 'format': 'json'})
-        
-        if response.status_code == 200: #Successful
-            data = response.json()
-            results = data.get('results', {}).get('bindings', [])
-            if results:
-                for result in results:
-                    person = result.get('person', {}).get('value', None)
-                    label = result.get('personLabel', {}).get('value', None)
-                    if person and 'entity/Q' in person and label: #We get a ton of results, and almost all of them a gibberish, so we need to filter them
-                        return label
-        elif response.status_code in [408, 429, 500, 502, 503, 504]:
-            time.sleep(delay)
-        elif response.status_code in [400, 404]:
-            print("Error: %s"%response.status_code)
-            return None
+    response_json = sparql_query(query, retries, delay)
+    if response_json:
+        results = response_json.get('results', {}).get('bindings', [])
+        if results:
+            for result in results:
+                #person = result.get('person', {}).get('value', None) #wd:*Wikidata ID*
+                label = most_common_results(['personLabel'], results)
+                if label:
+                    return label
     return None
 
 
@@ -1031,6 +1076,8 @@ def get_person_aliases(person_name):
     """
     #TODO
     #both aliases - and different language names
+    #plan: if given as an ID, query the ID, get all names for each language AND the "also known as" aliases
+          #if given as a name, query the name, get the (most common) ID, then do the same as above
     pass
 
 
