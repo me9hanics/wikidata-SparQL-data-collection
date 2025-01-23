@@ -1,21 +1,32 @@
 # Wikidata SparQL API wrapper: Data collection from Wikipedia profiles 
-A file with functions to help fetch various data of personalities (and other entities) from Wikidata, and a tutorial notebook showing how to use the methods.<br>
+A file with Python methods to help fetch various data of personalities (and other entities) from Wikidata, and a tutorial notebook showing how to use these functions.<br>
 
-This repository was used to collect data of over 10000 painters for the projects [PainterPalette dataset](https://github.com/me9hanics/PainterPalette) and [ArtProject](https://github.com/me9hanics/ArtProject). (In contrast, WikiArt only contains painting data of 3000 painters.)
+This repository has been used to collect data of over 10000 painters for projects such as the [PainterPalette dataset](https://github.com/me9hanics/PainterPalette) and [ArtProject](https://github.com/me9hanics/ArtProject). (In contrast, WikiArt only contains data of 3000 painters, whereas Wikidata has over 200k profiles marked with "painter" as an occupation.)
 
 ## How to use?
 
-There are NO! non-standard dependencies for this module, all used libraries are part of the Python standard library. There is one optional exception: you need to install pandas if you want to use the `results_dataframe` function.
+Getting started is **as easy as it gets: there are no! non-standard dependencies** for this module, all used libraries are part of the Python standard library. There is one optional exception: you need to install pandas if you want to use the `results_dataframe` function.
 
-- Just download the ```functions.py``` file.
+
+- **Just download the ```functions.py``` file** - you'll be ready to include it in your project.
   
 - To try examples, you can check the `examples.ipynb` Jupyter Notebook too.
  
 All methods are stored in the self-sufficient ```functions.py``` file, which you can easily place in your work folder and import in any Python/Jupyter Notebook with `import functions`.
 
+**Method 2: without downloading**<br>
+If you have the `httpimport` library installed in your environment, you can also import the library from an online source, without downloading it:
+
+```import httpimport
+with httpimport.remote_repo('https://raw.githubusercontent.com/me9hanics/sparql-wikidata-data-collection/main/'):
+    import functions as wiki_wrapper
+```
+
+A (pip) package will soon be created.
+
 ### Gather data of someone (van Gogh) from Wikidata
 
-Use the ```get_all_person_info_strict``` or the ```get_all_person_info``` function (preferably the first - to not collect statue or other nonhuman instances - other options are *get_person_locations* or *get_exhibitions_by_id* which include less information). You can also write your own SparQL query if you want to gather other properties not included among these, the module has support for that. (Read [this section](https://github.com/me9hanics/wikidata-SparQL-data-collection?tab=readme-ov-file#sparql-queries-tutorial-for-other-attributes) if you want to know how to write your own queries).
+Use the ```get_all_person_info_strict``` or the ```get_all_person_info``` function (preferably the first - that does not collect statue or other nonhuman instances - other options are *get_person_locations* or *get_exhibitions_by_id* which include less information). You can also write your own SparQL query if you want to gather other properties not included among these, the module has support for that. (Read [this section](https://github.com/me9hanics/wikidata-SparQL-data-collection?tab=readme-ov-file#sparql-queries-tutorial-for-other-attributes) if you want to know how to write your own queries).
 
 Using the `get_all_person_info_strict` function for van Gogh:
 
