@@ -5,12 +5,12 @@ This repository has been used to collect data of over 10000 painters for project
 
 ## How to use?
 
-Getting started is **as easy as it gets: there are no! non-standard dependencies** for this module, all used libraries are part of the Python standard library. There is one optional exception: you need to install pandas if you want to use the `results_dataframe` function.
+Getting started is **as easy as it gets: there are no! non-standard dependencies** for this module, all used libraries are part of the Python standard library (except the `requests` library, which may not be included in many cases). There is one optional exception: you need to install pandas if you want to use the `results_dataframe` function.
 
 
 - **Just download the ```functions.py``` file** - you'll be ready to include it in your project.
   
-- To try examples, you can check the `examples.ipynb` Jupyter Notebook too.
+- For example usage, you can check the `examples.ipynb` Jupyter Notebook too.
  
 All methods are stored in the self-sufficient ```functions.py``` file, which you can easily place in your work folder and import in any Python/Jupyter Notebook with `import functions`.
 
