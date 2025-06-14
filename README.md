@@ -1,14 +1,18 @@
 # Wikidata SparQL API wrapper: Data collection from Wikipedia profiles 
 A file with Python methods to help fetch various data of personalities (and other entities) from Wikidata, and a tutorial notebook showing how to use these functions.<br>
 
-This repository has been used to collect data of over 10000 painters for projects such as the [PainterPalette dataset](https://github.com/me9hanics/PainterPalette) and [ArtProject](https://github.com/me9hanics/ArtProject). (In contrast, WikiArt only contains data of 3000 painters, whereas Wikidata has over 200k profiles marked with "painter" as an occupation.)
+This repository has been used to collect data of over 10000 painters for projects such as the [PainterPalette dataset](https://github.com/me9hanics/PainterPalette?tab=readme-ov-file#painterpalette) and [ArtProject](https://github.com/me9hanics/ArtProject/?tab=readme-ov-file#artproject). (In contrast, WikiArt only contains data of 3000 painters, whereas Wikidata has over 200k profiles marked with "painter" as an occupation.)
+
+<h3 style="color: red;">NetSci 2025</h3>
+
+If you've come here from the NetSci 2025 conference slides, thank you for attending! Here you can find the methods to collect historical figures' data from Wikidata, and various examples. For other sources shown at the conference (e.g. painter datasets), please check out the Readme file in any of the above links.
 
 ## How to use?
 
 Getting started is **as easy as it gets: there are no! non-standard dependencies** for this module, all used libraries are part of the Python standard library (except the `requests` library, which may not be included in many cases). There is one optional exception: you need to install pandas if you want to use the `results_dataframe` function.
 
 
-- **Just download the ```functions.py``` file** - you'll be ready to include it in your project.
+- **Just download the ```functions.py``` file** - you'll be ready to include it in your project. Potentially, you may have to install the `requests` library, if it is not included in your Python environment / standard library. (You can install it if needed with `pip install requests`.)
   
 - For example usage, you can check the `examples.ipynb` Jupyter Notebook too.
  
