@@ -12,7 +12,7 @@ If you've come here from the NetSci 2025 conference slides, thank you for attend
 Getting started is **as easy as it gets: there are no! non-standard dependencies** for this module, all used libraries are part of the Python standard library (except the `requests` library, which may not be included in many cases). There is one optional exception: you need to install pandas if you want to use the `results_dataframe` function.
 
 
-- **Just download the ```functions.py``` file** - you'll be ready to include it in your project. Potentially, you may have to install the `requests` library, if it is not included in your Python environment / standard library. (You can install it if needed with `pip install requests`.)
+- **Method 1: Just download the ```functions.py``` file** - you'll be ready to include it in your project. Potentially, you may have to install the `requests` library, if it is not included in your Python environment / standard library. (You can install it if needed with `pip install requests`.)
   
 - For example usage, you can check the `examples.ipynb` Jupyter Notebook too.
  
