@@ -1,7 +1,7 @@
 # Wikidata SparQL API wrapper: Data collection from Wikipedia profiles 
 A file with Python methods to help fetch various data of personalities (and other entities) from Wikidata, and a tutorial notebook showing how to use these functions.<br>
 
-This repository has been used to collect data of over 10000 painters for projects such as the [PainterPalette dataset](https://github.com/me9hanics/PainterPalette?tab=readme-ov-file#painterpalette) and [ArtProject](https://github.com/me9hanics/ArtProject/?tab=readme-ov-file#artproject). (In contrast, WikiArt only contains data of 3000 painters, whereas Wikidata has over 200k profiles marked with "painter" as an occupation.)
+This repository has been used to collect data of over 10000 painters for projects such as the [PainterPalette dataset](https://github.com/me9hanics/PainterPalette?tab=readme-ov-file#painterpalette) and [ArtProjects](https://github.com/me9hanics/ArtProjects/?tab=readme-ov-file#artprojects). (In contrast, WikiArt only contains data of 3000 painters, whereas Wikidata has over 200k profiles marked with "painter" as an occupation.)
 
 <h3 style="color: red;">NetSci 2025</h3>
 
